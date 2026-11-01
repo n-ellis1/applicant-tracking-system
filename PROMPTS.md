@@ -28,6 +28,31 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 3 follow-up: commit retry and push
+
+### Prompts
+
+1. **Commit and push Phase 3.**
+   > I approve the file list and commit message. Commit Phase 3 on main and push to origin. Report whether the push succeeded and the working tree is clean. Don't start Phase 4.
+
+2. **Log the retry and commit this update.**
+   > Append a short follow-up session entry to PROMPTS.md according to its instructions. Record the failed PowerShell commit attempt, the successful retry using a scratch message file, and the successful Phase 3 push. Preserve existing entries.
+   >
+   > Commit and push this documentation update with the message "Document Phase 3 commit retry". Don't start Phase 4.
+
+### Summary
+
+- **Outcome:**
+  - **Phase 3 commit:** `e124a3b` "Phase 3: Job openings with skills" on `main`, with the 20 approved files and the approved message.
+  - **Push:** succeeded (`e9d9c1d..e124a3b main -> main`), and the working tree was clean afterwards.
+  - **This entry:** committed and pushed separately as "Document Phase 3 commit retry".
+- **Deviations:**
+  - None. I asked for this follow-up entry because the main Phase 3 entry was written before the commit.
+- **Sideways:**
+  - **Failed commit attempt:** the agent piped a PowerShell here-string to `git commit -F -`. Windows PowerShell 5.1 passed the message as a pathspec instead, and git failed with "did not match any file(s) known to git". Nothing was committed, and `git push` reported "Everything up-to-date". The files were left staged with no partial commit.
+  - **Retry:** the agent wrote the approved message to a file in its session scratchpad and committed with `git commit -F <file>`, which succeeded.
+  - **Phase 3 log timing:** the failure wasn't in the main Phase 3 entry, because that entry was written before committing. The agent flagged this and waited for my prompt instead of editing the log unprompted.
+
 ## 2026-11-01 — Phase 3: Job openings with skills
 
 ### Prompts
