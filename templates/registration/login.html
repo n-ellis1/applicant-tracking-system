@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Sign in{% endblock %}
+
+{% block content %}
+  <div class="mx-auto mt-12 w-full max-w-sm">
+    <div class="card border border-base-300 bg-base-200 shadow-lg">
+      <form method="post" action="{% url 'login' %}" class="card-body gap-4">
+        {% csrf_token %}
+        <h1 class="card-title text-2xl">Sign in</h1>
+        <p class="text-sm text-base-content/80">Hiring staff only. Accounts are created by an administrator.</p>
+
+        {% if form.non_field_errors %}
+          <div role="alert" class="alert alert-error">
+            {% for error in form.non_field_errors %}<span>{{ error }}</span>{% endfor %}
+          </div>
+        {% endif %}
+
+        <fieldset class="fieldset">
+          <label class="fieldset-legend" for="id_username">Username</label>
+          <input type="text" name="username" id="id_username" class="input w-full"
+                 value="{{ form.username.value|default_if_none:'' }}"
+                 autocomplete="username" autocapitalize="none" autofocus required>
+
+          <label class="fieldset-legend" for="id_password">Password</label>
+          <input type="password" name="password" id="id_password" class="input w-full"
+                 autocomplete="current-password" required>
+        </fieldset>
+
+        <input type="hidden" name="next" value="{{ next }}">
+        <button type="submit" class="btn btn-primary w-full">Sign in</button>
+      </form>
+    </div>
+  </div>
+{% endblock %}

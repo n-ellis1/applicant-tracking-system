@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+/* DaisyUI's built-in dark theme is the only theme. */
+@plugin "daisyui" {
+  themes: dark --default;
+}
+
+@source "../../templates";
+@source "../../hiring/templates";

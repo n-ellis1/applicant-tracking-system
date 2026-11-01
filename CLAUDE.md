@@ -18,6 +18,29 @@ Internal Django applicant tracking system where hiring staff track candidates, j
 - Use HTMX only in the pipeline workspace; use standard Django pages elsewhere.
 - Enable timezone support: store UTC, display `America/Chicago`, and use `timezone.localdate()` for local dates.
 
+## Commands
+- Setup: `uv sync`, then `uv run python manage.py migrate`
+- Run (dev server + Tailwind watch): `uv run python manage.py tailwind runserver`
+- Build CSS once: `uv run python manage.py tailwind build`
+- Tests: `uv run pytest`
+- Lint / format: `uv run ruff check .` and `uv run ruff format --check .` (apply with `uv run ruff format .`)
+- Migrations check: `uv run python manage.py makemigrations --check`
+
+## Project layout
+- `config/`: settings and root URLs (`/admin/`, `/accounts/` auth views, then `hiring.urls`).
+- `hiring/`: the only app. URL namespace `hiring`; templates in `hiring/templates/hiring/`; tests in `hiring/tests/test_*.py`.
+- `templates/`: `base.html`, nav partials `_nav.html` / `_nav_links.html`, `registration/login.html`.
+- `assets/css/source.css`: Tailwind + DaisyUI source. Builds to `static/css/tailwind.css` (gitignored).
+- `static/js/htmx.min.js`: vendored HTMX 2.0.4.
+
+## Conventions
+- `LoginRequiredMiddleware` protects every page site-wide. Don't add per-view login decorators; mark a view `login_not_required` only if it must be public.
+- Keep Django's default `ModelBackend`: it's what refuses inactive users' existing sessions.
+- Pages extend `base.html` and pass `active_nav` (`pipeline`, `candidates`, `jobs`, `skills`) to highlight the nav link.
+- Use DaisyUI's `dark` theme only (`data-theme="dark"` on `<html>`); style with DaisyUI component classes.
+- Tests use pytest functions with pytest-django's `client` and `db` fixtures, not `TestCase` classes.
+- On Windows, `uv run python manage.py tailwind config` needs `PYTHONIOENCODING=utf-8` (it crashes printing emoji otherwise).
+
 ## References
 - PRD (requirements, stage rules, acceptance criteria): `prd/applicant-tracking-system.md`
 - Phased implementation plan: `plans/applicant-tracking-system.md`

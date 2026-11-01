@@ -1,0 +1,4 @@
+<li><a href="{% url 'hiring:pipeline' %}" {% if active_nav == "pipeline" %}class="menu-active" aria-current="page"{% endif %}>Pipeline</a></li>
+<li><a href="{% url 'hiring:candidate_list' %}" {% if active_nav == "candidates" %}class="menu-active" aria-current="page"{% endif %}>Candidates</a></li>
+<li><a href="{% url 'hiring:job_list' %}" {% if active_nav == "jobs" %}class="menu-active" aria-current="page"{% endif %}>Jobs</a></li>
+<li><a href="{% url 'hiring:skill_list' %}" {% if active_nav == "skills" %}class="menu-active" aria-current="page"{% endif %}>Skills</a></li>

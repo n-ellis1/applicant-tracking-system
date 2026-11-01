@@ -1,0 +1,30 @@
+[project]
+name = "applicant-tracking-system"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "django>=6.1.2",
+    "django-tailwind-cli>=4.8.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "pytest-django>=4.14.0",
+    "ruff>=0.17.3",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["test_*.py"]
+testpaths = ["hiring/tests"]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 88
+extend-exclude = ["hiring/migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "DJ"]
+# The formatter keeps code within line-length; long strings and URLs are allowed.
+ignore = ["E501"]

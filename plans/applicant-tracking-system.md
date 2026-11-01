@@ -109,14 +109,14 @@ A running Django project managed by uv, with the `config` package and the `hirin
 
 ### Acceptance criteria
 
-- [ ] `uv sync`, `uv run python manage.py migrate` and the documented Tailwind run command start the app.
-- [ ] An anonymous visit to any page except login redirects to login.
-- [ ] An active employee account created in admin can sign in and lands on the Pipeline page.
-- [ ] An inactive account can't sign in, and a signed-in session stops working after the account is deactivated.
-- [ ] A regular employee account (not staff or superuser) can't use `/admin/`.
-- [ ] Log out works from the nav through POST and returns to login.
-- [ ] The dark theme applies to the login page, nav and placeholder pages.
-- [ ] Ruff and pytest are configured in `pyproject.toml` and pass.
+- [x] `uv sync`, `uv run python manage.py migrate` and the documented Tailwind run command start the app.
+- [x] An anonymous visit to any page except login redirects to login.
+- [x] An active employee account created in admin can sign in and lands on the Pipeline page.
+- [x] An inactive account can't sign in, and a signed-in session stops working after the account is deactivated.
+- [x] A regular employee account (not staff or superuser) can't use `/admin/`.
+- [x] Log out works from the nav through POST and returns to login.
+- [x] The dark theme applies to the login page, nav and placeholder pages.
+- [x] Ruff and pytest are configured in `pyproject.toml` and pass.
 
 ### Possible TDD candidates (not approved)
 

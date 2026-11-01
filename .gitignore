@@ -218,3 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Built Tailwind CSS (run: uv run python manage.py tailwind build)
+static/css/tailwind.css

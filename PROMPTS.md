@@ -28,6 +28,82 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 1: project setup, sign-in and dark app shell
+
+### Prompts
+
+1. **Start Phase 1 (`/implement`).**
+   > /implement @prd/applicant-tracking-system.md @plans/applicant-tracking-system.md implement Phase 1 only
+   >
+   > Read CLAUDE.md and follow the approved plan and our implement and tdd skills.
+   >
+   > Before writing code, propose the TDD test candidates and wait for my approval. Explain what each test checks in beginner-friendly language.
+   >
+   > Don't start Phase 2. After implementation and automated checks, give me the browser verification steps and wait for me to test them before marking Phase 1 complete.
+
+2. **Approve the TDD candidates.**
+   > I approve both TDD candidates. Start Phase 1 only.
+   >
+   > For each candidate, show me the test and its RED result, explain why it failed and what passing will prove, then stop for my approval before writing the code that makes it pass.
+
+3. **Approve test 1 and ask for GREEN.**
+   > I approve this test as written. Add the planned login protection, run the test, and show me the GREEN result before moving on.
+   >
+   > If the inactive-session test already passes afterward, report that honestly as a regression test of existing behavior rather than claiming another RED-to-GREEN cycle.
+
+4. **Confirm cycle 1 and move to candidate 2.**
+   > Yes, I agree this implements the intended behavior. Move on to candidate 2. Show me the test and its result, and report whether it passes immediately without any additional code changes.
+
+5. **Continue with the rest of Phase 1.**
+   > Yes, continue with the remaining Phase 1 work as listed. Keep the normal authentication backend unchanged.
+   >
+   > Run the planned automated checks, then give me the exact steps to start the app and verify Phase 1 in the browser. Wait for my browser checks before marking the phase complete, committing, pushing, or starting Phase 2.
+
+   *(A "Tool loaded." message arrived while the agent was stopping its smoke-test server. It carried no instruction.)*
+
+6. **Browser checks passed; mark complete and propose CLAUDE.md.**
+   > Phase 1 browser checks passed: login protection, employee access, navigation, admin refusal, logout, deactivation of an existing session, inactive login refusal, narrow-screen menu, and dark theme.
+   >
+   > During testing, an admin save returned a CSRF error. Opening the admin form fresh and retrying worked; no code change was needed.
+   >
+   > Mark Phase 1 complete and show me the proposed CLAUDE.md updates. Add only verified commands, actual project structure, and useful conventions established in Phase 1. Keep it concise.
+   >
+   > Don't commit or start Phase 2 yet.
+
+7. **Correction: approve CLAUDE.md with a narrower Windows note, and write this log.**
+   > I approve the diff, with one wording change: make the Windows encoding note specific to the command you actually observed needing PYTHONIOENCODING=utf-8. Leave broader troubleshooting details in README.
+   >
+   > Apply the updates, then write this session log to PROMPTS.md according to its instructions. Include the TDD results, browser checks, and the CSRF error resolved by reopening the form.
+   >
+   > Show me the changed-file summary and proposed Phase 1 commit message before committing. Don't start Phase 2.
+
+### Summary
+
+- **Outcome:**
+  - **Project:** uv project (Python 3.14, Django 6.1.2) with the `config` package and the single `hiring` app. Ruff and pytest/pytest-django are configured in `pyproject.toml`. Central-time settings, and Django's login/logout views under `/accounts/`. After sign-in, staff land on a Pipeline placeholder. Placeholder Candidates, Jobs and Skills pages are there for the nav.
+  - **Front end:** django-tailwind-cli pinned to tailwind-cli-extra 2.10.34 (Tailwind 4.3.3, DaisyUI 5.7.50), with DaisyUI's `dark` as the only theme. HTMX 2.0.4 is vendored. The base layout's top nav collapses into a ☰ menu on narrow screens, and Log out is a POST form. The login page is styled to match.
+  - **TDD candidate 1** (signed-out visitor redirected to login): RED with `assert 200 == 302`, because no login requirement existed yet. Adding `LoginRequiredMiddleware` in settings made it GREEN. I agreed this implements the behavior site-wide, not just for the tested URL.
+  - **TDD candidate 2** (deactivated user's existing session refused): passed on its first run with no new code, because Django's default `ModelBackend` already treats inactive users as signed out on every request. It's recorded as a **regression test of existing behavior, not a RED-to-GREEN cycle**. To show the test can fail, the agent ran it once from a scratch file outside the repo with `AllowAllUsersModelBackend` swapped in, and it failed with `assert 200 == 302`. The project's auth backend wasn't changed.
+  - **Ordinary tests:** 14 more, covering:
+    - every page redirecting signed-out visitors, and the login page staying public
+    - landing on Pipeline after sign-in, and returning to the requested page
+    - an inactive account not being able to sign in
+    - a non-staff employee being refused at `/admin/`, while a superuser gets in
+    - logout working by POST and being rejected by GET
+    - the nav contents and the dark theme
+  - **Automated checks:** 16 tests passed. `ruff check`, `ruff format --check`, `makemigrations --check` and `manage.py check` were all clean.
+  - **Browser checks (by me):** all passed. They covered login protection, employee sign-in and access, navigation, admin refusal, logout, deactivation ending an existing session, inactive sign-in refusal, the narrow-screen menu, and the dark theme.
+  - **Docs:** Phase 1's acceptance criteria are ticked in the plan. CLAUDE.md gained Commands, Project layout and Conventions sections. README has setup, run, checks, troubleshooting and layout.
+- **Deviations:**
+  - **Honest reporting:** I asked up front that candidate 2 be reported as a regression test if it passed immediately, and it was. The agent had flagged that likely outcome before writing it.
+  - **Auth backend:** I explicitly asked to keep Django's normal authentication backend unchanged.
+  - **CLAUDE.md wording:** I narrowed the Windows encoding note to the one command observed failing (`tailwind config`). The broader troubleshooting went in README instead.
+- **Sideways:**
+  - **Windows encoding:** `tailwind config` crashed with `UnicodeEncodeError` printing emoji to the cp1252 console. Setting `PYTHONIOENCODING=utf-8` fixed it. The agent then confirmed that `tailwind runserver` works from PowerShell without it.
+  - **Scratch check settings:** the first scratch run of the failure check didn't pick up the Django settings because the file was outside the repo. Rerunning with `--ds=config.settings` fixed it.
+  - **CSRF error:** during my browser checks, an admin save returned a CSRF error. Reopening the admin form and saving again worked. It was a stale token, not a code bug, and no change was needed.
+  - **Line length:** Ruff flagged long lines in Django's generated password-validator settings. E501 was turned off in favor of the formatter's line length.
+
 ## 2026-11-01 — Initial CLAUDE.md for the Applicant Tracking System
 
 ### Prompts
