@@ -28,6 +28,106 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 3: Job openings with skills
+
+### Prompts
+
+1. **Start Phase 3 (`/implement`).**
+   > /implement @prd/applicant-tracking-system.md @plans/applicant-tracking-system.md implement Phase 3 only
+   >
+   > Read CLAUDE.md and follow the implement and tdd skills. Propose the TDD candidates, explain each in beginner-friendly language, and wait for my approval before writing code.
+   >
+   > After implementation and automated checks, give me the browser verification steps and wait for my confirmation. Don't mark the phase complete, commit, push, or start Phase 4 yet.
+
+2. **Approve both candidates, with a split and an admin requirement.**
+   > I approve both candidates. For candidate 2, use separate tests for the default Open filter and preserving search/filter values in pagination links, so failures are easy to understand.
+   >
+   > Keep the planned admin bulk-delete check too; don't assume the QuerySet test alone proves the admin behavior.
+   >
+   > Start with candidate 1. Show me its test and RED result, then stop for approval before implementing the protection.
+
+3. **Approve test 1 (QuerySet delete protection).**
+   > I approve this test. Implement the QuerySet deletion protection, then show me the GREEN result and regression results before moving on.
+   >
+   > The protection must count usage by both open and closed jobs. Keep the separate tests for single-object deletion, the app delete page, and admin bulk deletion.
+
+4. **Start test 2 (default Open filter).**
+   > Yes, move on to candidate 2, starting with the default Open filter test. Show me the test and its RED result, then stop for approval before making it pass.
+   >
+   > Keep the remaining deletion-path tests and protections on the Phase 3 checklist.
+
+5. **Approve test 2.**
+   > I approve this test. Add the default Open filter, then show me the GREEN result and regression results. Stop before starting the pagination test.
+
+6. **Start test 3 (pagination links).**
+   > Yes, start the pagination test. Show that it checks search and filter values are preserved in the actual next-page link. Show me the test and RED result, then stop for approval before implementing the change.
+
+7. **Approve test 3.**
+   > I approve this test. Make pagination links preserve the search and filter values, then show me the GREEN result and regression results before continuing.
+
+8. **Continue with the rest of Phase 3, with a logging correction.**
+   > Yes, continue with the rest of Phase 3 as listed, including the remaining skill-deletion protections and their separate tests.
+   >
+   > One logging correction: we completed three RED-to-GREEN tests in this phase: QuerySet deletion protection, the default Open filter, and pagination preserving search/filter values.
+   >
+   > Run all planned checks, then give me the browser verification steps. Wait for my confirmation before marking Phase 3 complete, committing, pushing, or starting Phase 4.
+
+9. **Browser checks passed; mark complete and propose CLAUDE.md.**
+   > Phase 3 manual verification passed: job creation and required fields, list ordering, editing and skills, search/filter/pagination, invalid-filter fallback, skill protection for open and closed jobs, admin single and bulk deletion protection, shared skill renaming, job deletion, and narrow-screen layout.
+   >
+   > Mark Phase 3 complete. Show me any proposed CLAUDE.md updates, limited to concise, durable conventions established and verified in this phase. If nothing needs adding, say so.
+   >
+   > Don't commit or start Phase 4 yet.
+
+10. **Correction: approve CLAUDE.md with adjustments, and write this log.**
+    > Approve the updates with these adjustments:
+    >
+    > - Record shared fixtures in hiring/tests/conftest.py and data builders in hiring/tests/helpers.py, without listing individual function names.
+    > - Keep the Tailwind source-scanning note.
+    > - Use this deletion guidance: "Where built-in PROTECT is insufficient, enforce deletion rules on both model and QuerySet paths. App and admin deletion pages must explain blocking records instead of returning an error page."
+    > - Keep the list-page convention.
+    >
+    > Apply the updates and write this session log to PROMPTS.md according to its instructions. Record the three RED-to-GREEN tests and completed browser checks.
+    >
+    > Show me the changed-file summary and proposed commit message before committing. Don't start Phase 4.
+
+### Summary
+
+- **Outcome:**
+  - **Model:** `JobOpening` with title, department, employment type (Full-time, Part-time, Contract, Internship), description, optional location, status (Open/Closed, default Open), `closed_at`, timestamps, and a plain `skills = ManyToManyField(Skill, blank=True, related_name="jobs")`. Ordered by `Lower("title")`. Migration `0003_jobopening`.
+  - **Skill delete protection:** a `refuse_if_used()` helper raises `ProtectedError` when any job uses the skill, open or closed. Both `SkillQuerySet.delete()` and `Skill.delete()` call it. A bulk delete that includes even one used skill refuses everything. The app's delete page catches `ProtectedError` and lists the jobs using the skill, with no Delete button. `SkillAdmin.get_deleted_objects` adds those jobs as protected objects, so admin single and bulk delete show Django's "cannot delete" page.
+  - **Jobs list:** GET title search (case- and space-insensitive), Open/Closed/All filter defaulting to Open with unknown values falling back to Open, sorted by title, 25 per page, Next/Previous links carrying the cleaned `q` and `status`, and all seven columns (Active applications shows 0 until Phase 7).
+  - **Job pages:** create and edit share `JobOpeningForm` (no status or closed-date fields, skills as checkboxes), detail with skills and Central-time created/updated/closed times, and a GET/POST delete confirmation.
+  - **Admin:** `JobOpening` is registered with `JobOpeningAdminForm` (the app form with admin widgets) and `filter_horizontal` skills. Status, closed date and timestamps are read-only.
+  - **TDD test 1** (QuerySet delete of a used skill is refused, and the skill and its link remain): RED with `Failed: DID NOT RAISE ProtectedError`, because Django deleted the skill and silently dropped its job link. Adding `SkillQuerySet.delete()` made it GREEN.
+  - **TDD test 2** (the jobs list shows only Open jobs by default): RED with `assert ['Closed Role', 'Open Role'] == ['Open Role']` after scaffolding an unfiltered list. Filtering on Open made it GREEN. The agent noted this only satisfied the test until the filter was read from the URL.
+  - **TDD test 3** (the rendered next-page link keeps search and filter): the test parses the actual `rel="next"` href and expects exactly `q=data`, `status=all`, `page=2`. It used `status=all` so the value could only come from the URL. RED with `assert {'page': ['2']} == {...}` after scaffolding plain `?page=N` links. Adding `page_query` made it GREEN.
+  - **All three were genuine RED-to-GREEN cycles**, across the two approved candidates (candidate 2 was split into tests 2 and 3, as I asked).
+  - **Ordinary tests:** 42 more, covering:
+    - single `Skill.delete()`, a closed job protecting a skill, all-or-nothing bulk delete, unused skills deleting through every path
+    - the skill delete page explaining blocking jobs, and a forged POST refused
+    - admin bulk delete refused for open and for closed jobs, admin single delete refused, and unused skills deleting in admin
+    - jobs list filters (including the fallback), search, search plus filter, title order, 25 per page with page 2 filtered, the Previous link, columns and links
+    - job create (Open, trimmed, skills, optional location and skills, required fields, status ignored), edit (details, skills, last-updated, prefilled form), detail in CST and CDT, skill rename shown on open and closed jobs, a 404, and delete confirmation
+    - admin job add and change sharing the form, with status and closed date not editable
+    - the new job create page redirecting signed-out visitors
+  - **Automated checks:** 80 tests passed. `ruff check`, `ruff format --check` and `makemigrations --check` were clean. `tailwind build` succeeded.
+  - **Browser checks (by me):** all passed. They covered job creation and required fields, list ordering, editing and skills, search/filter/pagination, the invalid-filter fallback, skill protection for open and closed jobs, admin single and bulk delete protection, shared skill renaming, job deletion, and the narrow-screen layout.
+  - **Docs:** Phase 3's acceptance criteria are ticked in the plan. CLAUDE.md's Project layout now records the shared test fixture and helper files and the Tailwind `forms.py` scan. Conventions gained the deletion guidance and the list-page convention.
+- **Deviations:**
+  - **Candidate 2 split:** I required separate tests for the default Open filter and for pagination links, so failures would be easier to read.
+  - **Admin proof:** I required a separate admin bulk-delete test instead of relying on the QuerySet test, plus separate tests for single delete and the app delete page.
+  - **Closed jobs:** I required the protection to count closed jobs as well as open ones. It's tested in the model, in admin, and in my browser check.
+  - **CLAUDE.md wording:** I replaced the agent's deletion convention with my own wording and removed individual function names from the test-layout line.
+- **Sideways:**
+  - **Miscounted cycles:** after test 3 the agent said "both approved TDD cycles are complete". I corrected the log to three RED-to-GREEN tests across the two candidates.
+  - **Shell append failed:** the agent's first attempt to append the ordinary job tests through a Bash heredoc failed with a quoting error and wrote nothing. It added them with the edit tool instead.
+  - **Apostrophe test repair:** one new test looked for `can&#x27;t` but the apostrophe is literal template text, which Django doesn't escape. It was a mechanical repair to `can't`.
+  - **Missing CSS classes:** before giving the browser steps, the agent noticed that Tailwind only scanned template folders, so the `textarea` and `checkbox` classes set in `forms.py` would be missing. It added `forms.py` as a Tailwind source and confirmed both classes in the built CSS.
+  - **Test refactor:** `make_job` moved to `hiring/tests/helpers.py` and `employee_client` to `hiring/tests/conftest.py` during cycle 2. The approved test 1 asserted the same things afterwards.
+  - **Admin wording:** Django's "cannot delete" page says deleting would require "deleting the following protected related objects", which isn't quite accurate for a skill link. It's Django's standard text and was left as is.
+  - **Not done here:** the job delete page always returns to the jobs list. Handling a `next` return address comes with close and reopen in Phase 4.
+
 ## 2026-11-01 — Phase 2: Skills page
 
 ### Prompts

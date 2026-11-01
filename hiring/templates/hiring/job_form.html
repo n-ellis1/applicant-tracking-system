@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+  <div class="mx-auto w-full max-w-2xl">
+    <div class="card border border-base-300 bg-base-200">
+      <form method="post" class="card-body gap-4" novalidate>
+        {% csrf_token %}
+        <h1 class="card-title text-2xl">{{ title }}</h1>
+
+        {% for field in form %}
+          {% if field.name == "skills" %}
+            <fieldset class="fieldset">
+              <legend class="fieldset-legend">Skills</legend>
+              {% if field.field.queryset.exists %}
+                <div class="grid gap-2 sm:grid-cols-2">
+                  {% for checkbox in field %}
+                    <label class="flex min-w-0 items-center gap-2">
+                      {{ checkbox.tag }}
+                      <span class="break-words">{{ checkbox.choice_label }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <p class="text-base-content/80">No skills yet. <a href="{% url 'hiring:skill_create' %}" class="link">Create a skill</a> first.</p>
+              {% endif %}
+              {% for error in field.errors %}
+                <p class="text-sm text-error">{{ error }}</p>
+              {% endfor %}
+            </fieldset>
+          {% else %}
+            <fieldset class="fieldset">
+              <label class="fieldset-legend" for="{{ field.id_for_label }}">
+                {{ field.label }}{% if not field.field.required %} <span class="font-normal text-base-content/70">(optional)</span>{% endif %}
+              </label>
+              {{ field }}
+              {% for error in field.errors %}
+                <p class="text-sm text-error">{{ error }}</p>
+              {% endfor %}
+            </fieldset>
+          {% endif %}
+        {% endfor %}
+
+        <div class="flex flex-wrap gap-2">
+          <button type="submit" class="btn btn-primary">Save</button>
+          <a href="{% if job %}{% url 'hiring:job_detail' job.pk %}{% else %}{% url 'hiring:job_list' %}{% endif %}" class="btn btn-ghost">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

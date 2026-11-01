@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}Delete job{% endblock %}
+
+{% block content %}
+  <div class="mx-auto w-full max-w-md">
+    <div class="card border border-base-300 bg-base-200">
+      <form method="post" class="card-body gap-4">
+        {% csrf_token %}
+        <h1 class="card-title text-2xl">Delete job</h1>
+        <p class="break-words">Delete the job <strong>{{ job.title }}</strong>? This can't be undone. To stop hiring for a real opening, close it instead.</p>
+
+        <div class="flex flex-wrap gap-2">
+          <button type="submit" class="btn btn-error">Delete</button>
+          <a href="{% url 'hiring:job_detail' job.pk %}" class="btn btn-ghost">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Jobs{% endblock %}
+
+{% block content %}
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <h1 class="text-2xl font-semibold">Jobs</h1>
+    <a href="{% url 'hiring:job_create' %}" class="btn btn-primary">New job</a>
+  </div>
+
+  <form method="get" class="mb-4 flex flex-wrap items-end gap-2" role="search">
+    <label class="flex min-w-0 grow flex-col gap-1 sm:max-w-sm">
+      <span class="text-sm">Title</span>
+      <input type="search" name="q" value="{{ q }}" class="input w-full" placeholder="Search by title">
+    </label>
+    <label class="flex flex-col gap-1">
+      <span class="text-sm">Status</span>
+      <select name="status" class="select">
+        {% for value, label in status_filters %}
+          <option value="{{ value }}"{% if value == status %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="btn btn-primary">Search</button>
+  </form>
+
+  <div class="card border border-base-300 bg-base-200">
+    <div class="card-body p-0">
+      {% if jobs %}
+        <div class="overflow-x-auto">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Department</th>
+                <th>Location</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Closed</th>
+                <th class="text-right">Active applications</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for job in jobs %}
+                <tr>
+                  <td><a href="{% url 'hiring:job_detail' job.pk %}" class="link link-hover font-medium">{{ job.title }}</a></td>
+                  <td>{{ job.department }}</td>
+                  <td>{{ job.location|default:"—" }}</td>
+                  <td>{{ job.get_employment_type_display }}</td>
+                  <td>
+                    <span class="badge {% if job.status == 'open' %}badge-success{% else %}badge-neutral{% endif %}">{{ job.get_status_display }}</span>
+                  </td>
+                  <td>{{ job.closed_at|date:"M j, Y"|default:"—" }}</td>
+                  {# Applications arrive in a later phase. #}
+                  <td class="text-right">0</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="p-4 text-base-content/80">No jobs match.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if page_obj.has_other_pages %}
+    <nav class="mt-4 flex items-center justify-center gap-2" aria-label="Pagination">
+      {% if page_obj.has_previous %}
+        <a href="?{% if page_query %}{{ page_query }}&amp;{% endif %}page={{ page_obj.previous_page_number }}" rel="prev" class="btn btn-outline btn-sm">Previous</a>
+      {% endif %}
+      <span class="text-sm">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}
+        <a href="?{% if page_query %}{{ page_query }}&amp;{% endif %}page={{ page_obj.next_page_number }}" rel="next" class="btn btn-outline btn-sm">Next</a>
+      {% endif %}
+    </nav>
+  {% endif %}
+{% endblock %}

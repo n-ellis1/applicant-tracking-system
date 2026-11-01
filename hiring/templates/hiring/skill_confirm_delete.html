@@ -5,16 +5,31 @@
 {% block content %}
   <div class="mx-auto w-full max-w-md">
     <div class="card border border-base-300 bg-base-200">
-      <form method="post" class="card-body gap-4">
-        {% csrf_token %}
-        <h1 class="card-title text-2xl">Delete skill</h1>
-        <p class="break-words">Delete the skill <strong>{{ skill.name }}</strong>? This can't be undone.</p>
-
-        <div class="flex flex-wrap gap-2">
-          <button type="submit" class="btn btn-error">Delete</button>
-          <a href="{% url 'hiring:skill_list' %}" class="btn btn-ghost">Cancel</a>
+      {% if used_by %}
+        <div class="card-body gap-4">
+          <h1 class="card-title text-2xl">Can't delete skill</h1>
+          <p class="break-words"><strong>{{ skill.name }}</strong> can't be deleted because these job openings use it. Remove it from each job first, or rename it instead.</p>
+          <ul class="list-inside list-disc">
+            {% for job in used_by %}
+              <li class="break-words"><a href="{% url 'hiring:job_detail' job.pk %}" class="link">{{ job.title }}</a> ({{ job.get_status_display }})</li>
+            {% endfor %}
+          </ul>
+          <div class="flex flex-wrap gap-2">
+            <a href="{% url 'hiring:skill_list' %}" class="btn btn-ghost">Back to skills</a>
+          </div>
         </div>
-      </form>
+      {% else %}
+        <form method="post" class="card-body gap-4">
+          {% csrf_token %}
+          <h1 class="card-title text-2xl">Delete skill</h1>
+          <p class="break-words">Delete the skill <strong>{{ skill.name }}</strong>? This can't be undone.</p>
+
+          <div class="flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-error">Delete</button>
+            <a href="{% url 'hiring:skill_list' %}" class="btn btn-ghost">Cancel</a>
+          </div>
+        </form>
+      {% endif %}
     </div>
   </div>
 {% endblock %}

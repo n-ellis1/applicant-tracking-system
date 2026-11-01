@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}{{ job.title }}{% endblock %}
+
+{% block content %}
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex min-w-0 flex-wrap items-center gap-3">
+      <h1 class="break-words text-2xl font-semibold">{{ job.title }}</h1>
+      <span class="badge {% if job.status == 'open' %}badge-success{% else %}badge-neutral{% endif %}">{{ job.get_status_display }}</span>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'hiring:job_edit' job.pk %}" class="btn btn-outline">Edit</a>
+      <a href="{% url 'hiring:job_delete' job.pk %}" class="btn btn-outline btn-error">Delete</a>
+    </div>
+  </div>
+
+  <div class="card border border-base-300 bg-base-200">
+    <div class="card-body gap-6">
+      <dl class="grid gap-4 sm:grid-cols-3">
+        <div>
+          <dt class="text-sm text-base-content/70">Department</dt>
+          <dd class="break-words">{{ job.department }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm text-base-content/70">Employment type</dt>
+          <dd>{{ job.get_employment_type_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm text-base-content/70">Location</dt>
+          <dd class="break-words">{{ job.location|default:"—" }}</dd>
+        </div>
+      </dl>
+
+      <section>
+        <h2 class="mb-2 font-semibold">Description</h2>
+        <div class="break-words">{{ job.description|linebreaks }}</div>
+      </section>
+
+      <section>
+        <h2 class="mb-2 font-semibold">Skills</h2>
+        {% if skills %}
+          <ul class="flex flex-wrap gap-2">
+            {% for skill in skills %}
+              <li class="badge badge-outline">{{ skill.name }}</li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="text-base-content/80">No skills attached.</p>
+        {% endif %}
+      </section>
+
+      <dl class="grid gap-4 text-sm sm:grid-cols-3">
+        <div>
+          <dt class="text-base-content/70">Created</dt>
+          <dd>{{ job.created_at|date:"M j, Y, g:i A T" }}</dd>
+        </div>
+        <div>
+          <dt class="text-base-content/70">Last updated</dt>
+          <dd>{{ job.updated_at|date:"M j, Y, g:i A T" }}</dd>
+        </div>
+        {% if job.closed_at %}
+          <div>
+            <dt class="text-base-content/70">Closed</dt>
+            <dd>{{ job.closed_at|date:"M j, Y, g:i A T" }}</dd>
+          </div>
+        {% endif %}
+      </dl>
+    </div>
+  </div>
+{% endblock %}

@@ -183,13 +183,13 @@ Deleting a skill used by any job is blocked in the app, in the model's `delete()
 
 ### Acceptance criteria
 
-- [ ] A job requires title, department, employment type and description. Location is optional. New jobs are Open.
-- [ ] Skills can be attached and changed on create and edit.
-- [ ] The jobs list searches by title, filters Open (default), Closed or All, sorts by title, shows 25 per page, and keeps search and filter across pages.
-- [ ] Job detail shows skills, created time and last-updated time in Central time.
-- [ ] A job with no applications can be deleted after confirmation.
-- [ ] A skill used by any job can't be deleted through the app view, `Skill.delete()` or `Skill.objects.filter(...).delete()`. An unused skill can.
-- [ ] Renaming a skill updates its name on every job that uses it.
+- [x] A job requires title, department, employment type and description. Location is optional. New jobs are Open.
+- [x] Skills can be attached and changed on create and edit.
+- [x] The jobs list searches by title, filters Open (default), Closed or All, sorts by title, shows 25 per page, and keeps search and filter across pages.
+- [x] Job detail shows skills, created time and last-updated time in Central time.
+- [x] A job with no applications can be deleted after confirmation.
+- [x] A skill used by any job can't be deleted through the app view, `Skill.delete()` or `Skill.objects.filter(...).delete()`. An unused skill can.
+- [x] Renaming a skill updates its name on every job that uses it.
 
 ### Possible TDD candidates (not approved)
 

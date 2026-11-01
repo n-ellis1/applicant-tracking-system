@@ -28,9 +28,9 @@ Internal Django applicant tracking system where hiring staff track candidates, j
 
 ## Project layout
 - `config/`: settings and root URLs (`/admin/`, `/accounts/` auth views, then `hiring.urls`).
-- `hiring/`: the only app. URL namespace `hiring`; templates in `hiring/templates/hiring/`; tests in `hiring/tests/test_*.py`.
+- `hiring/`: the only app. URL namespace `hiring`; templates in `hiring/templates/hiring/`; tests in `hiring/tests/test_*.py`, with shared fixtures in `hiring/tests/conftest.py` and data builders in `hiring/tests/helpers.py`.
 - `templates/`: `base.html`, nav partials `_nav.html` / `_nav_links.html`, `registration/login.html`.
-- `assets/css/source.css`: Tailwind + DaisyUI source. Builds to `static/css/tailwind.css` (gitignored).
+- `assets/css/source.css`: Tailwind + DaisyUI source. It scans the template folders and `hiring/forms.py` (for widget classes). Builds to `static/css/tailwind.css` (gitignored).
 - `static/js/htmx.min.js`: vendored HTMX 2.0.4.
 
 ## Conventions
@@ -42,6 +42,8 @@ Internal Django applicant tracking system where hiring staff track candidates, j
 - Where case-insensitive uniqueness is required, pair a database constraint with friendly form validation that excludes the current record on edit.
 - App and admin forms should share validation behavior.
 - Delete confirmation pages use GET for display and POST for deletion.
+- Where built-in PROTECT is insufficient, enforce deletion rules on both model and QuerySet paths. App and admin deletion pages must explain blocking records instead of returning an error page.
+- List pages read search and filter from GET, show 25 per page, and fall back to the default filter for unknown values. Page links carry the cleaned search and filter values.
 - Tests use pytest functions with pytest-django's `client` and `db` fixtures, not `TestCase` classes.
 - On Windows, `uv run python manage.py tailwind config` needs `PYTHONIOENCODING=utf-8` (it crashes printing emoji otherwise).
 

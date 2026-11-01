@@ -16,6 +16,7 @@ def employee(db):
         "hiring:pipeline",
         "hiring:candidate_list",
         "hiring:job_list",
+        "hiring:job_create",
         "hiring:skill_list",
     ],
 )

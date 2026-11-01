@@ -7,3 +7,5 @@
 
 @source "../../templates";
 @source "../../hiring/templates";
+/* Form widgets set DaisyUI classes in Python. */
+@source "../../hiring/forms.py";
