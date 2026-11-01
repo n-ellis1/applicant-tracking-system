@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Skills{% endblock %}
+
+{% block content %}
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <h1 class="text-2xl font-semibold">Skills</h1>
+    <a href="{% url 'hiring:skill_create' %}" class="btn btn-primary">New skill</a>
+  </div>
+
+  <div class="card border border-base-300 bg-base-200">
+    <div class="card-body p-0">
+      {% if skills %}
+        <ul class="divide-y divide-base-300">
+          {% for skill in skills %}
+            <li class="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+              <span class="min-w-0 break-words">{{ skill.name }}</span>
+              <div class="flex gap-2">
+                <a href="{% url 'hiring:skill_edit' skill.pk %}" class="btn btn-outline btn-sm">Rename</a>
+                <a href="{% url 'hiring:skill_delete' skill.pk %}" class="btn btn-outline btn-error btn-sm">Delete</a>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="p-4 text-base-content/80">No skills yet. Create the first one.</p>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

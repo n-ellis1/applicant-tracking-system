@@ -28,6 +28,101 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 2: Skills page
+
+### Prompts
+
+1. **Start Phase 2 (`/implement`).**
+   > /implement @prd/applicant-tracking-system.md @plans/applicant-tracking-system.md implement Phase 2 only
+   >
+   > Read CLAUDE.md and follow the implement and tdd skills.
+   >
+   > Propose the TDD candidates and wait for my approval before writing code. Explain each in beginner-friendly language.
+   >
+   > Don't start Phase 3. After automated checks pass, give me the browser verification steps and wait for my confirmation before marking the phase complete.
+
+2. **Approve the TDD candidates.**
+   > I approve all three candidates. Implement Phase 2 only, following the TDD approval stops one test at a time.
+   >
+   > If a later test already passes because an earlier change provides that behavior, report it honestly as a regression test. Don't remove working protection just to manufacture a RED result.
+   >
+   > Show me the first test and its assertion failure, then wait for my approval before making it pass.
+
+3. **Approve test 1 and its error wording.**
+   > I approve this test and the error wording. Add the form validation, then show me the GREEN result and relevant regression results. Stop for my review before starting the next test.
+
+4. **Confirm cycle 1 and start test 2.**
+   > Yes, I'm happy with this result. Start test 2 for renaming a skill to its own name with different capitalization. Show me the test and its RED result, then stop for approval before changing the validation.
+
+5. **Approve test 2.**
+   > I approve test 2. Update the duplicate lookup to exclude the skill being edited. Run both skill tests and the regression suite, then show me the GREEN results before moving to test 3.
+
+6. **Start test 3.**
+   > Yes, proceed to test 3. Show me the database-constraint test and its RED assertion result before adding the constraint or migration. Then wait for my approval.
+
+7. **Approve test 3.**
+   > I approve test 3. Add the case-insensitive unique constraint and generate its migration. Run all skill tests and the full regression suite, then show me the GREEN results before continuing.
+
+8. **Continue with the rest of Phase 2.**
+   > Yes, continue with the remaining Phase 2 work and ordinary tests. Keep trimming in the form; don't add a model save override.
+   >
+   > Make sure creating and renaming through both the app and Django admin trim surrounding spaces and reject duplicates with a friendly error.
+   >
+   > Run all planned checks, then give me the browser verification steps. Wait for my confirmation before marking Phase 2 complete, committing, pushing, or starting Phase 3.
+
+9. **Browser checks passed; mark complete and propose CLAUDE.md.**
+   > All Phase 2 browser checks passed, including duplicate validation, trimming, renaming, alphabetical order, delete confirmation and cancel, admin behavior, and the narrow-screen dark layout.
+   >
+   > Mark Phase 2 complete. Show me any proposed CLAUDE.md updates, limited to useful conventions established and verified in this phase. If nothing needs adding, say so.
+   >
+   > Don't commit or start Phase 3 yet.
+
+10. **Correction: approve CLAUDE.md with shorter lines, and write this log.**
+    > Approve the updates with these shorter lines:
+    >
+    > - Forms live in hiring/forms.py; normalize user input in forms rather than model save() overrides.
+    > - Where case-insensitive uniqueness is required, pair a database constraint with friendly form validation that excludes the current record on edit.
+    > - App and admin forms should share validation behavior.
+    > - Delete confirmation pages use GET for display and POST for deletion.
+    >
+    > Leave the Commands and Project layout sections unchanged.
+    >
+    > Apply these updates, then write this session log to PROMPTS.md according to its instructions. Include the three RED-to-GREEN tests and browser verification.
+    >
+    > Show me the changed-file summary and proposed commit message before committing. Don't start Phase 3.
+
+### Summary
+
+- **Outcome:**
+  - **Model:** `Skill` with a `name`, ordered by `Lower("name")`, and a `UniqueConstraint(Lower("name"), name="unique_skill_name_ci")`. Migrations `0001_initial` (model) and `0002_skill_unique_skill_name_ci` (constraint).
+  - **Pages:** the Skills placeholder became a real alphabetical list with New skill, Rename and Delete buttons. `/skills/new/` and `/skills/<pk>/edit/` share `SkillForm` and `skill_form.html`. `/skills/<pk>/delete/` shows a confirmation on GET and deletes only on POST. Usage protection waits for Phase 3, as planned.
+  - **Form:** `hiring/forms.py` `SkillForm`. Django's form field trims the name, and `clean_name` rejects a case-insensitive match against other skills with "A skill with this name already exists." There's no model `save()` override.
+  - **Admin:** `Skill` is registered with `SkillAdminForm`, a subclass of `SkillForm` with `widgets = {}`, so admin trims and validates like the app while keeping admin's own widgets.
+  - **TDD test 1** (create with a case or space duplicate shows a form error): parametrized over `python`, `  Python  ` and ` PYTHON`. RED with `assert 302 == 200` in all three cases, because the form saved the duplicate and redirected. Adding `clean_name` with a `name__iexact` lookup made it GREEN.
+  - **TDD test 2** (rename to its own name in different case saves): RED with `assert 200 == 302`, because `clean_name` matched the skill's own row. This was the gap the agent had flagged after test 1. Adding `exclude(pk=self.instance.pk)` made it GREEN.
+  - **TDD test 3** (database rejects a case-insensitive duplicate without the form): RED with `Failed: DID NOT RAISE IntegrityError`. That's pytest's `raises` expectation failing, not missing scaffolding. Adding the constraint and its migration made it GREEN. Tests 1 and 2 were unaffected.
+  - **All three were genuine RED-to-GREEN cycles.** None passed early, so no test had to be reported as a regression test.
+  - **Ordinary tests:** 14 more, covering:
+    - alphabetical order ignoring case, and the list's links
+    - trimming on create and rename, and a blank name being rejected
+    - renaming onto another skill's name being rejected
+    - the rename page prefilled with the current name
+    - the delete confirmation not deleting on GET, and deleting on POST
+    - a 404 for a missing skill
+    - admin add and change: trimming, rejecting duplicates, and allowing a skill's own name in different case
+  - **Automated checks:** 35 tests passed. `ruff check`, `ruff format --check` and `makemigrations --check` were clean. `migrate` and `tailwind build` succeeded.
+  - **Browser checks (by me):** all passed. They covered duplicate validation, trimming, renaming, alphabetical order, delete confirmation and cancel, admin behavior, and the narrow-screen dark layout.
+  - **Docs:** Phase 2's acceptance criteria are ticked in the plan. CLAUDE.md's Conventions gained four lines (forms and normalization, case-insensitive uniqueness, shared app/admin validation, GET/POST delete confirmation). Commands and Project layout are unchanged.
+- **Deviations:**
+  - **Trimming location:** the agent noted that the database constraint covers capitalization but not spaces, and offered model-level trimming. I kept trimming in the form only, with no `save()` override.
+  - **Admin parity:** I explicitly required admin create and rename to trim and reject duplicates like the app, which led to `SkillAdminForm` and the four admin tests.
+  - **CLAUDE.md wording:** I replaced the agent's four proposed convention lines with shorter, more general wording.
+- **Sideways:**
+  - **Formatter:** `ruff format --check` flagged one over-long line in a new test. It was rewritten and the checks re-ran clean.
+  - **Two migrations:** the constraint arrived in its own migration (`0002`) because the TDD order added it after the model. They were left as two migrations, not squashed.
+  - **What the admin tests prove:** Django's admin form strips text by default, and model validation also reports the constraint's `violation_error_message`. So the admin trimming and duplicate tests would likely pass even without `SkillAdminForm`. They prove the admin *behavior*, not that the shared form is what produces it. The shared form keeps the two paths using the same code.
+  - **Local database:** the agent ran `migrate` against the local `db.sqlite3` during the checks.
+
 ## 2026-11-01 — Phase 1: project setup, sign-in and dark app shell
 
 ### Prompts

@@ -147,12 +147,12 @@ The `Skill` model and migration. The Skills page lists skills alphabetically, wi
 
 ### Acceptance criteria
 
-- [ ] Skills are listed alphabetically, case-insensitively.
-- [ ] Creating a skill trims the name.
-- [ ] A name that differs from an existing skill only by case or spaces shows a form error on create and on rename.
-- [ ] Renaming a skill to its own name with different capitalization works.
-- [ ] The database rejects a case-insensitive duplicate even when the form is bypassed.
-- [ ] An unused skill can be deleted after confirmation.
+- [x] Skills are listed alphabetically, case-insensitively.
+- [x] Creating a skill trims the name.
+- [x] A name that differs from an existing skill only by case or spaces shows a form error on create and on rename.
+- [x] Renaming a skill to its own name with different capitalization works.
+- [x] The database rejects a case-insensitive duplicate even when the form is bypassed.
+- [x] An unused skill can be deleted after confirmation.
 
 ### Possible TDD candidates (not approved)
 

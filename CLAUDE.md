@@ -38,6 +38,10 @@ Internal Django applicant tracking system where hiring staff track candidates, j
 - Keep Django's default `ModelBackend`: it's what refuses inactive users' existing sessions.
 - Pages extend `base.html` and pass `active_nav` (`pipeline`, `candidates`, `jobs`, `skills`) to highlight the nav link.
 - Use DaisyUI's `dark` theme only (`data-theme="dark"` on `<html>`); style with DaisyUI component classes.
+- Forms live in `hiring/forms.py`; normalize user input in forms rather than model `save()` overrides.
+- Where case-insensitive uniqueness is required, pair a database constraint with friendly form validation that excludes the current record on edit.
+- App and admin forms should share validation behavior.
+- Delete confirmation pages use GET for display and POST for deletion.
 - Tests use pytest functions with pytest-django's `client` and `db` fixtures, not `TestCase` classes.
 - On Windows, `uv run python manage.py tailwind config` needs `PYTHONIOENCODING=utf-8` (it crashes printing emoji otherwise).
 
