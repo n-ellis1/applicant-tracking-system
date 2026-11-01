@@ -27,3 +27,463 @@ Each entry has this shape:
     - **Outcome:** what was built and what was kept
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
+
+## 2026-11-01 — Phased implementation plan for the Applicant Tracking System
+
+### Prompts
+
+1. **Create the plan (`/prd-to-plan`).**
+   > /prd-to-plan @prd/applicant-tracking-system.md
+   >
+   > Create a phased implementation plan from the approved PRD. Also read both prototype decision files in prototypes/.
+   >
+   > Keep each phase small enough to complete in one session. Each phase should deliver a working behavior I can test in the browser, including the models, forms, views, templates, and tests it needs. Don't split phases into database-only or UI-only layers.
+   >
+   > For each phase, explain what it delivers, which requirements it covers, and the manual browser checks I'll perform. Include test-candidate approval, TDD where applicable, session logging, a review of CLAUDE.md updates, and a commit and push after verification.
+   >
+   > Don't implement anything yet or create CLAUDE.md. Save the plan and give me its filename so I can review it first.
+
+   *(I rejected the agent's first write of `plans/applicant-tracking-system.md` and interrupted the request before sending the next prompt.)*
+
+2. **Correction: plan revisions.**
+   > The plan looks good overall, but please revise these points:
+   >
+   > 1. CLAUDE.md must be created and approved before implementation, after planning. Remove instructions to create it during Phase 1. Phase 1 should only update the existing file with commands and structure that have actually been verified. Don't record conventions for later features before they exist.
+   >
+   > 2. Split Phase 6 into two smaller working phases:
+   > - Record an application from the candidate detail page, including models, initial history, validation, duplicate protection, candidate/job deletion protection, and a basic full-page application view.
+   > - Build the three-column workspace, add the job-side application entry point, connect application links, and show counts and empty states.
+   >
+   > Keep both phases usable and manually testable. Renumber later phases and update their references.
+   >
+   > 3. Make sure the TDD workflow follows our actual tdd and implement skills. All test candidates used for TDD need my approval; don't treat the suggested candidates as already approved.
+   >
+   > 4. Each phase should end with updating the session log when prompted, reviewing changes and the commit message, committing and pushing after verification, and then /clear before the next phase.
+   >
+   > Keep the approved product decisions unchanged. Don't implement anything yet.
+
+3. **Approve the plan and write this log.**
+   > The phase sizes look good. Keep all 14 phases as written.
+   >
+   > I approve storing the current stage on Application, updated by the services together with its history entry. Keep deriving the past rule facts from history. We can decide demo timestamps in Phase 14.
+   >
+   > Mark the plan Approved. Don't implement anything or create CLAUDE.md yet.
+   >
+   > Write this session log to PROMPTS.md according to its instructions, including the plan review, revisions, and approval.
+
+### Summary
+
+- **Outcome:**
+  - **Plan:** `plans/applicant-tracking-system.md`, marked **Approved**. It has 14 vertical-slice phases, each one session long and testable in the browser:
+    1. Project setup, sign-in and dark app shell
+    2. Skills
+    3. Job openings with skills
+    4. Closing and reopening jobs
+    5. Candidates
+    6. Recording an application from the candidate page
+    7. The pipeline workspace
+    8. Moving applications
+    9. Reopening finished applications and workspace job controls
+    10. Workspace list: stage groups, tabs and search
+    11. HTMX selection and browser history
+    12. HTMX stage actions and application details
+    13. Application deletion and admin protections
+    14. Demo seed data and final polish
+  - **Each phase lists:** covered user stories and stage rules, what it builds, acceptance criteria, possible TDD candidates (marked not approved), and manual browser checks.
+  - **Plan header:** durable decisions covering the owning app, auth approach, a URL table, models and relationships, where rules live, HTMX full vs. partial responses, front end, time and tooling.
+  - **"How every phase runs":** the `/implement` and `/tdd` steps with their approval stops. Each phase ends with marking it complete, a CLAUDE.md review, the session log when I prompt for it, reviewing changes and the commit message, commit and push, then `/clear`.
+  - **Decisions settled at approval:** `Application.stage` stores the current stage, written only by the services together with its history entry. The past rule facts stay derived from history. Demo history timestamps are deferred to Phase 14.
+  - **Not started:** no CLAUDE.md and no production code.
+- **Deviations:**
+  - **CLAUDE.md timing:** the agent's draft created CLAUDE.md in Phase 1. I moved its creation to a separate step after planning and before implementation. Phases only update it with verified commands, structure and conventions.
+  - **Phase 6 split:** I split the draft's large "record applications and basic workspace" phase in two: a candidate-page application path with a basic full-page view (Phase 6), then the three-column workspace with the job-side entry point, links, counts and empty states (Phase 7). That took the plan from 13 phases to 14.
+  - **TDD approval:** I required the TDD steps to follow the real `/tdd` and `/implement` skills, with every candidate needing my approval in the session.
+  - **Phase ending:** I added reviewing changes and the commit message, the session log only when prompted, and `/clear` before the next phase.
+- **Sideways:**
+  - **Rejected first write:** I rejected the agent's first plan write for the four issues above, before it was saved.
+  - **Skipped quiz step:** the `/prd-to-plan` skill says to present the phase breakdown and iterate before writing the file. The agent wrote the file straight away because I'd asked for a saved plan to review. It listed the phases and asked the granularity questions after the revision instead.
+  - **Skill conflict:** the `/implement` skill says to update PROMPTS.md when finishing a phase, while PROMPTS.md says entries are added only when prompted. The revised plan follows PROMPTS.md: the log is written only when I prompt for it.
+  - **Memory note:** the agent saved a memory note recording these workflow preferences for later sessions.
+
+## 2026-11-01 — Design interview, two prototypes, and approved PRD for the Applicant Tracking System
+
+### Prompts
+
+1. **Start the design interview (`/grill-me`).**
+   > /grill-me
+   >
+   > I'm starting a new Django project called Applicant Tracking System. It's for a company's hiring team to keep track of job openings, candidates, and where each application is in the hiring process.
+   >
+   > I've already created the new repo, copied over my skills, added the prototype skill, and created PROMPTS.md. There isn't any Django code yet.
+   >
+   > For this assignment, we have to use:
+   > - Python
+   > - Django
+   > - SQLite
+   > - uv
+   > - Tailwind CSS with DaisyUI using django-tailwind-cli
+   > - HTMX
+   > - Ruff
+   > - Automated tests, either Django's built-in tests or pytest. We can talk through which one to use.
+   >
+   > Here are the requirements from the hiring department:
+   > - This is only for employees involved in hiring. Candidates won't log in.
+   > - Staff need to keep track of candidates and their basic information. They might come from the company website, job boards, referrals, or other places.
+   > - Staff need to create and edit job openings. Openings can be open or closed.
+   > - Staff need to record when a candidate applies for an opening.
+   > - A candidate can apply for multiple jobs, but they can't have more than one application for the same opening.
+   > - The hiring stages have to include Applied, Screening, Interview, Final Review, Offer, Hired, Rejected, and Withdrawn.
+   > - Staff need an easy way to see what stage applications are in and move them without reloading the whole page.
+   > - Job openings need to have skills associated with them, and the same skill can be used for multiple openings.
+   >
+   > We still need to figure out what information to store for candidates and jobs, how employee access works, and what happens to candidate records over time. We also need to decide what happens when a job closes, whether it can reopen, and how existing applications are handled.
+   >
+   > I'd also like help deciding how to organize the Django app and where the rules should go. Keep it fairly simple and explain the choices so I understand what I'm agreeing to and can explain them later.
+   >
+   > Ask me one question at a time, and wait for my answer before deciding anything.
+   >
+   > For the assignment, I need to use /prototype twice during this conversation:
+   > - Once to try out the rules for moving applications between hiring stages.
+   > - Once to compare different ways the hiring dashboard or pipeline could work.
+   >
+   > When we get to either of those topics, let me know and pause so I can run /prototype myself before making those decisions.
+   >
+   > My professor showed an example with a job list, a board with columns for hiring stages, and a table view. Those are just ideas, so don't assume I want all of those features. I want to work through the options and make my own choices.
+   >
+   > For now, we're just working through the design. Don't start building the Django app yet.
+
+2. **Q1, employee access.**
+   > Let's go with A. An admin will create employee accounts through Django's admin site, and there won't be a public signup. All employees using the system will have the same access, and all hiring pages should require login. We can decide whether records can be deleted or archived when we get to that question.
+
+3. **Q2, candidate fields.**
+   > Let's go with B. First name, last name, and email will be required, and the other fields can be optional. Email should be unique regardless of capitalization, with extra spaces trimmed.
+   >
+   > A general notes field on the candidate sounds good. We can discuss notes about a specific job when we get to applications. Let's leave resume uploads out.
+
+4. **Q3, candidate source.**
+   > Let's go with A. We'll store how the candidate first came to the company using Company Website, Job Board, Referral, or Other, with an optional source details field for things like the job board name or who referred them. It won't change automatically when they apply for another opening.
+
+5. **Q4, job opening fields.**
+   > Let's go with B. Title, department, employment type, and description should be required. Location can be optional, and staff can enter Remote there when appropriate. Plain text for department and location is fine. Include the automatic timestamps, and we can settle the closing rules in the later question.
+
+6. **Q5, skills.**
+   > Let's go with A and (i). Use a simple Skill model with names that are unique regardless of capitalization, and trim extra spaces. Job openings can share skills through a plain ManyToManyField.
+   >
+   > Staff should have a simple Skills list/create page inside the app, then choose existing skills on the job form. Let's leave required versus preferred skills and creating skills directly on the job form out of this project.
+
+7. **Q6, job status and reopening, then pause for the logic prototype.**
+   > Let's go with A, and new openings should start as Open. Closing records closed_at, and reopening clears it. We don't need a full history of job closures.
+   >
+   > Before approving how closing affects existing applications, I'd like to explore that behavior along with the application-stage rules in the required logic prototype.
+
+8. **Logic prototype (`/prototype`).**
+   > /prototype
+   >
+   > Let's prototype the application-stage rules and what happens to applications when a job closes.
+   >
+   > Use the stages and open questions from our grill conversation. These rules aren't approved yet, so make any suggested defaults clear and let me compare alternatives. I'd like to try allowing or blocking skipped stages, backward moves, and reopening completed applications. Also let me compare what happens when closing a job leaves applications unchanged versus freezing their movement.
+   >
+   > Keep the job status decision we already made: openings start Open, can close, and can reopen.
+   >
+   > Make a standalone HTML file in prototypes/ that I can open directly in my browser. Don't build any production Django code.
+   >
+   > Include readable current-state information, free-play controls, and guided scenarios for:
+   > - The normal path from Applied to Hired.
+   > - Skipping a stage and moving backward.
+   > - Rejecting or withdrawing, then trying to reopen.
+   > - Correcting an accidental stage change.
+   > - Closing a job with applications still in progress.
+   > - Trying to add an application to a closed job.
+   > - Reopening the job and checking its applications.
+   > - Trying to add a duplicate application for the same candidate and opening.
+   >
+   > Keep it focused on testing the rules, rather than designing the final dashboard. Explain how to open and use it, then wait for my feedback before treating any rules as approved.
+
+9. **Logic prototype feedback and stage-rule decisions.**
+   > I've gone through all eight scenarios. Here's what I want:
+   >
+   > - New applications start at Applied.
+   > - Normally, staff can skip forward and move back to any earlier active stage. Moving backward is useful when someone needs another screening or interview.
+   > - Staff can reject or withdraw an application from any active stage.
+   > - Hired and Rejected applications can reopen only to the stage they were in before that outcome, which lets staff correct mistakes.
+   > - Withdrawn is different: reopening it returns the existing application to Applied, and it must go through every stage again without forward skips. Backward moves are still allowed. This exception wasn't supported by the prototype, so I haven't tested it yet.
+   > - Closing a job leaves applications in their current stages and blocks movement except to Rejected or Withdrawn.
+   > - Closed jobs cannot accept new applications or have applications moved to Hired.
+   > - Reopening a job clears closed_at and allows active applications to move again. It doesn't automatically reopen completed applications.
+   > - Duplicate applications for the same candidate and opening are always blocked, regardless of stage.
+   > - A candidate can still apply to a different open job using the same candidate record and a separate application.
+   >
+   > Please record these choices and why we chose them alongside the prototype. Note that the Withdrawn exception still needs verification, and carry it into the PRD and implementation tests.
+   >
+   > Then continue /grill-me one question at a time. Don't start production code yet, and remember we still need the separate UI prototype.
+
+   *(I rejected the agent's first write of `prototypes/stage-rules-decisions.md` and interrupted the request before sending the next prompt.)*
+
+10. **Correction: settle the Withdrawn open details before recording.**
+    > These rules look good overall. Let's settle the open details now:
+    >
+    > - Once a Withdrawn application reopens, the no-forward-skipping rule stays with that application, including if it is later Rejected or Hired and reopened again. Otherwise, reopening it could bypass the requirement to repeat every stage.
+    > - If it withdraws again and reopens, it returns to Applied again.
+    > - Offer to Hired is allowed because it is the next step.
+    > - Reopening any finished application requires the job to be open.
+    > - No direct moves between final outcomes. Staff must reopen the application first.
+    >
+    > Please update the decisions and test expectations to match. Don't treat a particular implementation, such as a flag, as an approved architecture decision yet.
+    >
+    > Also, please describe the rejected one-stage-at-a-time option as limiting fast-tracking. Backward-movement restrictions were what blocked corrections; those are separate rules.
+    >
+    > Then continue the interview.
+
+11. **Q7, stage history.**
+    > Let's go with B. Each application should have a simple stage history showing the old stage, new stage, date and time, and which employee made the change. Include the initial application and reopening events so staff can follow the whole process.
+    >
+    > We don't need a full audit log for candidate or job edits. We can decide how the history is stored and used by the rules when we discuss the architecture.
+
+12. **Q8, application fields.**
+    > Let's go with B. Applied on should default to today but be editable so staff can record the actual application date. Include an optional notes field for feedback specific to that job, plus automatic created and updated timestamps.
+    >
+    > We don't need a separate comments thread. Let's revisit optional rejection and withdrawal reasons during the UI prototype, but don't make them a requirement yet.
+
+13. **Q9, candidate deletion (plus confirming no future applied-on dates).**
+    > Let's go with D. Staff can delete a candidate only if they have no applications, with a confirmation page. If they have any applications, keep the candidate and their hiring history protected. We don't need archiving for now.
+    >
+    > Don't make Django admin an automatic exception to that protection. Any special cleanup can be handled separately.
+    >
+    > And yes, applied-on dates should not be in the future.
+
+14. **Q10, job deletion.**
+    > Let's go with A. Staff can delete a job opening only if it has no applications, with a confirmation page. If any applications exist, deletion should be blocked, including through Django admin. Closing is the normal way to retire an opening while keeping its hiring history.
+
+15. **Q11, application deletion and reassignment.**
+    > Let's go with B. An application can be deleted after confirmation only if its history contains just the initial Applied entry and it has never changed stages. Editing notes or the applied-on date doesn't affect that eligibility.
+    >
+    > Once any stage movement has happened, deletion is blocked, including through Django admin, even if the application later returns to Applied. The candidate and job can't be changed after creation. If those were entered incorrectly, staff must delete the unused application and create the correct one.
+
+16. **Q12, skill rename and delete.**
+    > Let's go with A. Staff can rename skills, keeping the trimmed, case-insensitive uniqueness rule. Renaming updates the name everywhere it's used, including closed openings.
+    >
+    > Deleting requires confirmation and is blocked if any open or closed job uses the skill. Staff must remove those links first. Apply the same deletion protection in Django admin.
+
+17. **Q13, editing closed jobs.**
+    > Let's go with C. Staff can edit a closed job's details and skills without reopening it. Show Last updated alongside the closed date.
+    >
+    > Editing must leave its status and closed_at unchanged. Reopening should remain a separate action, and edits shouldn't change existing applications or their stage history.
+
+18. **Q14, app structure and user model.**
+    > Let's go with A: a config project folder and one hiring app containing the hiring models and features.
+    >
+    > Keep Django's built-in User model as we decided earlier. We don't need custom account fields or behavior, so I'd rather keep authentication straightforward. Use Django's built-in login and logout views, with no separate accounts app.
+
+19. **Q15, where rules live.**
+    > Let's go with C and a small services.py. Keep the stage decisions in stages.py, and have services perform changes and write their history together in a transaction. Views should stay straightforward.
+    >
+    > Make sure the admin follows the same rules. Don't allow direct editing of application stages or history there; stage changes should use the same approved operations.
+    >
+    > Also account for bulk deletion in admin and QuerySet.delete(), since overriding a model's delete() alone doesn't cover those paths. Protect used skills while keeping the plain ManyToManyField we chose.
+    >
+    > Please distinguish database guarantees from rules enforced through our supported app and admin operations. Don't describe services as impossible to bypass. Keep the implementation focused rather than adding a general-purpose framework.
+
+20. **Q16, where rule facts come from.**
+    > Let's go with A. We already keep stage history, so I'd rather use that than store the same facts in extra Application fields.
+    >
+    > The service should get the stage before the current Hired or Rejected outcome from its history entry, and check whether the application has ever reopened from Withdrawn. Then pass those facts into stages.py.
+    >
+    > Keep history protected from editing and deletion through the app and admin, except when deleting an application that qualifies under our unused-application rule. Include tests for repeated reopening and withdrawal sequences so we know the history gives the right answers.
+
+21. **Q17, testing framework.**
+    > Let's go with B, pytest with pytest-django. Use parametrized tests for the stage-rule cases where it makes sense, and explain fixtures when we get to implementation so I understand the setup.
+
+22. **UI prototype (`/prototype`).**
+    > /prototype
+    >
+    > Let's compare different ways staff could view and manage the hiring pipeline.
+    >
+    > Use our approved requirements and stage rules. Build a standalone HTML prototype in prototypes/ using a lightweight Tailwind CSS and DaisyUI setup, without creating the production Django app or installing a separate toolchain.
+    >
+    > I'd like three structurally different options:
+    > - A per-job board with applications grouped into stage columns.
+    > - A compact application table with search, filters, and stage controls.
+    > - A list-and-detail workspace where selecting an application shows its details and actions beside the list.
+    >
+    > Use the same realistic sample data across the options so I can compare them fairly. Include enough applications to see how each layout handles a busy opening.
+    >
+    > Let me try:
+    > - Choosing a job and viewing its applications.
+    > - Moving an application using our approved rules.
+    > - Viewing notes and stage history.
+    > - Reopening a finished application.
+    > - Viewing a closed job and understanding which actions are blocked.
+    > - Finding Hired, Rejected, and Withdrawn applications.
+    > - Entering an optional rejection or withdrawal reason so I can decide whether to include that feature.
+    >
+    > Make the permanent no-skip restriction on applications reopened from Withdrawn visible and enforce it in the demo. Don't copy the old prototype's behavior where it differs from our approved decisions.
+    >
+    > Keep interactions in memory with no real data changes. Include an easy variant switcher, and explain how to open and compare the options.
+    >
+    > These are alternatives to evaluate, not approved features. Don't assume we'll build all three views. Wait for my feedback before choosing a direction.
+
+23. **UI prototype feedback: dark theme.**
+    > I've tested most of the prototype and it looks good so far. Can you change all three variants to a dark theme? The white background strains my eyes after a while.
+    >
+    > Use dark gray backgrounds with readable text and clear contrast for buttons, stage labels, and blocked actions. Keep the layouts and behavior the same for now so I can keep comparing them. Include the detail panels, modals, dropdowns, notes, and history in the dark theme too.
+    >
+    > Don't treat this as choosing a layout yet. My preference is a dark UI, but we still need to settle which interface to build.
+
+24. **UI direction chosen.**
+    > I like option C, the list-and-detail workspace, best. Let's use that direction with the dark theme.
+    >
+    > I especially like the stage progress indicator and having the actions, notes, and history beside the application list. It feels easier to work with someone without opening and closing different pages.
+    >
+    > We don't need the separate board and table views. Please record this choice and why, then continue /grill-me one question at a time to settle the remaining UI details, including whether to keep optional rejection and withdrawal reasons.
+
+25. **Q18, rejection and withdrawal reasons.**
+    > Let's go with A. Reject and Mark withdrawn should open an inline confirmation box with an optional reason. Save the reason on that stage history entry and display it in the timeline.
+    >
+    > For now, reasons should only be offered for moves to Rejected or Withdrawn. We don't need them for other stage moves or reopening. Keep the confirmation step even when the reason is left blank.
+
+26. **Q19, navigation.**
+    > Let's go with A. After login, staff should land on the Pipeline workspace. Keep the top navigation on every page, with Pipeline, Candidates, Jobs, Skills, the username, and Log out. The jobs sidebar should appear only in the workspace.
+    >
+    > Use regular Django pages and forms for managing candidates, jobs, and skills. Candidate detail pages should list their applications and link to the selected application in the workspace.
+    >
+    > If there are no open jobs, show a clear empty state with a link to create a job. Closed jobs should still be accessible from the workspace. We don't need a separate summary dashboard.
+
+27. **Q20, recording applications.**
+    > Let's go with C, without inline candidate creation. Staff can add an application from the selected job in the workspace or from a candidate's detail page, using shared form logic and the same service.
+    >
+    > From the workspace, only show candidates who haven't already applied to that job. From the candidate page, only show open jobs they haven't applied to. Keep server-side validation and the database duplicate constraint too.
+    >
+    > After saving, open the workspace with the new application selected. For a new candidate, staff should create their candidate record first, then add the application from their detail page.
+
+28. **Q21, HTMX and URLs.**
+    > Let's go with B. Selecting an application should update its detail panel without reloading the whole page, and the URL should follow the selection.
+    >
+    > Each application URL must also work as a normal full-page link for bookmarks, refresh, and links from candidate pages. Back and Forward should restore the correct selection and highlight.
+    >
+    > Stage changes should update the detail panel, application list, and any affected counts together without a full reload. Saving notes should use HTMX too. Switching jobs can stay a normal full-page link.
+    >
+    > Keep the full-page and partial responses straightforward, and include checks for refresh, direct links, and browser history.
+
+29. **Q22, workspace list filtering.**
+    > Let's go with A. Use Active, Finished, and All tabs with counts, stage groups in pipeline order, and a name or email search. Within each stage, show the most recent stage changes first.
+    >
+    > Keep the tab and search in the URL so refresh and browser history preserve them. Tab counts should reflect the selected job and search, before applying the Active or Finished tab.
+    >
+    > If a stage move puts the selected application outside the current filter, keep its updated details visible and explain that it no longer matches the list. Don't automatically switch tabs or clear my search.
+
+30. **Q23, detail panel actions.**
+    > Let's go with A. Keep the primary actions, buttons for other allowed moves, and a collapsed section explaining blocked moves. Keep the closed-job and no-skip alerts too.
+    >
+    > Reject and Withdraw must always open the inline confirmation box with the optional reason. No alternate button should bypass that step.
+    >
+    > The service should re-check every submitted move. If it's no longer allowed, show a clear error in the panel and refresh the available actions without changing the stage or adding a history entry.
+
+31. **Q24, closing and reopening jobs.**
+    > Let's go with B. Put Close job and Reopen job in the workspace header and on the job detail page, using the same views and services.
+    >
+    > Closing should use a separate confirmation page showing how many applications are still active and explaining that their stages stay unchanged, but only Reject and Withdraw remain available. Also explain that new applications will be blocked.
+    >
+    > Reopening can be a button without confirmation. Both actions should submit through POST. Afterward, return to the page staff came from, preserving the selected application and filters when returning to the workspace.
+
+32. **Q25, Candidates and Jobs list pages.**
+    > Let's go with A, using regular GET forms submitted with a button or Enter. No live search is needed on these pages.
+    >
+    > Candidates should be searchable by name or email and sorted by last name, then first name. Jobs should also have a title search, with Open, Closed, and All filters, defaulting to Open, and be sorted alphabetically by title.
+    >
+    > Use 25 records per page and preserve search and filter values when changing pages. The proposed columns sound good. Keep Skills as a simple alphabetical list with the create, rename, and protected-delete actions we already chose.
+
+33. **Q26, smaller screens (with a correction).**
+    > Let's go with A. Keep the three columns side by side on wide screens and stack them on narrow screens. Collapse the top navigation into a menu when needed.
+    >
+    > After selecting an application on a narrow screen, bring its detail panel into view. Make sure forms, buttons, and long text fit without causing horizontal page scrolling.
+    >
+    > I haven't provided a specific 16px-gutter requirement, so don't record that as an assignment requirement. This is our choice to make the app usable in smaller windows.
+
+34. **Q27, demo seed data.**
+    > Let's go with A. Include fictional candidates, skills, open and closed jobs, and applications covering the important stage and reopening scenarios. Create applications and stage history through our real services.
+    >
+    > Refuse to run if hiring data already exists. Leave out --reset for now so the command can't erase existing records.
+    >
+    > Local demo employee accounts are fine, with a known development-only password printed in the terminal. They don't need admin privileges. Document how to run the command once it's implemented and verified.
+
+35. **Q28, time zone.**
+    > Let's go with A and America/Chicago. Store timestamps in UTC with timezone support enabled, and display them in Central time. Use Django's timezone.localdate() for the applied-on default and future-date validation so they follow the same local date.
+
+36. **Write the PRD (`/to-prd`).**
+    > /to-prd
+    >
+    > Turn our completed grill conversation and both prototype decision files into the project PRD.
+    >
+    > Include all approved decisions from the conversation, including those not yet saved in files. Carry forward the fixed technology and business requirements, the stage rules, deletion protections, and the dark list-and-detail workspace.
+    >
+    > Make the Withdrawn reopening rules explicit, including the permanent no-forward-skipping restriction. Distinguish what we tested in the prototypes from what still needs verification.
+    >
+    > Include acceptance criteria for HTMX updates, direct application links, refresh, Back and Forward, filters, and selected applications that no longer match the list.
+    >
+    > Don't add rejected features or treat deferred tooling details as settled. Save the PRD and give me its exact filename. Don't create the implementation plan or production code yet. I want to review the PRD first.
+
+37. **PRD corrections.**
+    > The PRD looks good overall. Please make these corrections before I approve it:
+    >
+    > 1. Correct the database-guarantees section. Django's on_delete=PROTECT is enforced by Django's deletion handling, not a SQLite PROTECT constraint. Separate actual database constraints from protections enforced through Django. Don't claim stage history is impossible to delete through any code path.
+    >
+    > 2. Explicitly include editing candidate information, with the same validation and unique-email rules used during creation.
+    >
+    > 3. Explain where staff edit an application's applied-on date and notes. Both remain editable, but candidate and job stay fixed. Applied-on date edits must still reject future dates.
+    >
+    > 4. Clarify that only active, authenticated employee accounts can access hiring pages. Equal hiring access doesn't mean every employee gets Django admin access.
+    >
+    > 5. Make the stage-history protection wording consistent: staff cannot independently edit or delete history, but deleting an eligible never-moved application also removes its initial history entry.
+    >
+    > 6. Use the plain spelling resume instead of accented characters.
+    >
+    > Keep the other approved decisions unchanged. Show me the revised sections before marking the PRD approved.
+
+38. **Approve the PRD and write this log.**
+    > Editing the applied-on date and notes together in the workspace detail panel sounds good. I approve that choice and the revised PRD. Update its status to Approved.
+    >
+    > Write this session log to PROMPTS.md according to its instructions, including my design decisions, prototype feedback, corrections, and PRD revisions. Don't start planning or implementation yet.
+
+39. **Post-approval wording correction.**
+    > Change that sentence to "Every active employee has the same hiring access." Keep the PRD approved.
+    >
+    > Update this session's log to include this correction and approval accurately. Don't change older session entries.
+
+### Summary
+
+- **Outcome:**
+  - **Design interview:** 28 one-at-a-time questions covering access, data model, record lifecycle and deletion protection, architecture, testing, UI details, demo data and time zone.
+  - **Logic prototype:** `prototypes/stage-rules.html`, with rule toggles and eight guided scenarios. Decisions are in `prototypes/stage-rules-decisions.md` (15 stage rules plus test expectations; the Withdrawn reopen rules are flagged as needing verification).
+  - **UI prototype:** `prototypes/pipeline-ui.html`, with three variants (per-job board, application table, list-and-detail workspace), later switched to a dark theme. Variant C, list-and-detail with a dark theme, was chosen and recorded in `prototypes/pipeline-ui-decisions.md`, along with the rejection and withdrawal reason decision.
+  - **PRD:** `prd/applicant-tracking-system.md`, revised once with six corrections and marked **Approved**. After approval, one sentence in the Solution section was corrected to "Every active employee has the same hiring access." The PRD stays **Approved**.
+  - **Not started:** no implementation plan and no production Django code.
+- **Key design decisions:**
+  - **Access:** built-in `User`, admin-created accounts, equal hiring access for active employees, no admin access by default.
+  - **Data:** a `config` project with one `hiring` app. Candidates have a case-insensitive unique email and a fixed source list. Jobs are Open or Closed and can reopen. Skills are a plain many-to-many with protected delete. Applications have an applied-on date and notes, edited in the workspace detail panel, with candidate and job fixed.
+  - **Stage history:** records who and when, with optional reasons only for Rejected and Withdrawn, and is the source of the facts the rules need.
+  - **Stage rules:** forward skips and backward moves allowed. Hired and Rejected reopen to the previous stage. Withdrawn reopens to Applied, with a permanent no-skip restriction. Closed jobs allow only Reject or Withdraw. No direct moves between final outcomes.
+  - **Where rules live:** database unique constraints, Django `PROTECT`, a pure stage-rules module, transactional services, and admin and QuerySet delete paths following the same rules.
+  - **UI and supporting decisions:** pytest with pytest-django, HTMX selection with URL push and full-page fallbacks, a `seed_demo` command without reset, and `America/Chicago` time.
+- **Deviations:**
+  - **Q9:** I refused the admin-only deletion exception the agent described. Admin follows the same protections.
+  - **Q14:** I declined the agent's recommendation to set up a custom user model at project start, and kept Django's built-in `User`.
+  - **Q16:** I overrode the agent's recommendation (store rule facts as Application fields, plus consistency tests). The rules derive facts from stage history instead.
+  - **Q25:** jobs are sorted alphabetically by title, and I added a title search, instead of the agent's "title or newest" suggestion.
+  - **Q27:** I rejected the proposed `--reset` flag for the seed command, so it can never erase records.
+  - **Logic prototype follow-up:** I added a rule the prototype didn't model (Withdrawn → Applied with a permanent no-skip restriction), then settled its open details myself.
+  - **Recommendations extended rather than just accepted:** application deletion stays blocked even after returning to Applied (Q11); closed-job edits never touch status or `closed_at` (Q13); explicit Back/Forward and filter-mismatch behavior (Q21, Q22); no control may bypass the Reject/Withdraw confirmation (Q23); tab-count semantics (Q22).
+  - **UI prototype:** I asked for a dark theme across all variants before choosing a layout.
+  - **Follow-up question:** where applied-on date edits happen, raised during PRD review and approved as the workspace detail panel.
+- **Sideways:**
+  - **Rejected first write:** I rejected the agent's first write of the stage-rules decisions file and settled the open Withdrawn details first. I also corrected two things in it: implementation details like a "flag" must not read as approved architecture, and the rejected one-stage-at-a-time option limited fast-tracking, while the *backward-movement* restrictions were what blocked corrections.
+  - **Overclaimed guarantees:** in Q15 the agent initially implied services "can't be bypassed". I required database guarantees to be kept separate from rules enforced by supported operations.
+  - **Admin bulk delete:** the agent's first architecture framing relied on overriding `Model.delete()`. I pointed out that admin bulk delete and `QuerySet.delete()` bypass that.
+  - **Invented requirement:** the agent wrote a "16px gutter" requirement into a Q26 option that I never gave. I corrected it.
+  - **PRD draft errors, caught in my review and fixed before approval:**
+    - It described `on_delete=PROTECT` as a SQLite constraint and implied stage history was undeletable by any path.
+    - It omitted candidate editing, where the applied-on date is edited, and the active-account vs. Django-admin distinction.
+    - It used the accented spelling of "resume".
+  - **Missed inconsistency:** the six revisions missed the Solution section's "Every signed-in employee has the same access," which contradicted the corrected Access decisions. The agent noticed it only after the PRD was approved and while writing the log. It flagged it without editing the approved text. I then had it changed to "Every active employee has the same hiring access" and kept the PRD approved.
+  - **Self-caught conflicts:** a conflict between `PROTECT` on history and deleting eligible unused applications, resolved by deleting the initial entry and then the application in one transaction. A UI-prototype mismatch where the move list included Reject/Withdraw buttons that skipped the inline confirm, excluded in the PRD.
+  - **Unverified prototypes:** neither HTML prototype was run by the agent. Node wasn't installed, and the agent had no browser, so the code was reviewed by hand. The agent renamed `close`/`reopen` helpers to avoid clashing with `window.close`, and removed a leftover template line and opacity-suffixed color classes before handover.
+  - **Session setup:** `/login` was interrupted three times before succeeding.

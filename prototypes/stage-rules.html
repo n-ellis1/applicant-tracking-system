@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stage Rules Prototype</title>
+<!--
+  THROWAWAY PROTOTYPE — not production code.
+  Purpose: explore application-stage movement rules and job-closing effects
+  for the Applicant Tracking System before deciding on them.
+-->
+<style>
+  :root {
+    --bg: #f7f7f8;
+    --card: #ffffff;
+    --text: #1d1f24;
+    --muted: #646a75;
+    --line: #e2e4e8;
+    --accent: #4f46e5;
+    --accent-soft: #eef0ff;
+    --ok: #157f3b;
+    --ok-soft: #e8f6ed;
+    --bad: #b42318;
+    --bad-soft: #fdecea;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 0 0 12px; }
+  h3 { font-size: 14px; margin: 0 0 6px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  p { margin: 0 0 10px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin-bottom: 18px; }
+  .banner { background: #fff8e6; border: 1px solid #f1d58a; border-radius: 8px; padding: 8px 12px; font-size: 13px; margin: 10px 0 18px; }
+  .intro { max-width: 900px; }
+
+  /* Rules */
+  .rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+  .rule { border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+  .rule .q { font-weight: 600; margin-bottom: 6px; }
+  .rule label { display: flex; gap: 8px; align-items: flex-start; padding: 3px 0; cursor: pointer; font-size: 14px; }
+  .rule input { margin-top: 4px; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); margin-left: 4px; white-space: nowrap; }
+  .fixed { background: #f2f3f5; }
+  .fixed ul { margin: 0; padding-left: 18px; font-size: 14px; }
+
+  /* Layout */
+  .layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+  .side { position: sticky; top: 12px; }
+  @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } .side { position: static; } }
+
+  /* Jobs */
+  .jobs { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .job { border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+  .job .title { font-weight: 600; }
+  .status { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+  .status.Open { background: var(--ok-soft); color: var(--ok); }
+  .status.Closed { background: #eceef1; color: #4a505a; }
+
+  /* Applications */
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 8px; border-top: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); border-top: none; }
+  tr.changed td { background: var(--accent-soft); }
+  .stage { display: inline-block; font-weight: 600; font-size: 13px; padding: 2px 8px; border-radius: 6px; background: #eceef1; }
+  .stage.final { background: #1d1f24; color: #fff; }
+  .moves { display: flex; flex-wrap: wrap; gap: 4px; }
+  .table-scroll { overflow-x: auto; }
+
+  button {
+    font: inherit; font-size: 13px; border-radius: 6px; padding: 4px 9px; cursor: pointer;
+    border: 1px solid var(--line); background: #fff; color: var(--text);
+  }
+  button:hover { border-color: #b9bdc6; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.allowed { border-color: #a9d8b9; color: var(--ok); }
+  button.blocked { color: #a3a8b1; border-style: dashed; }
+  button.current { background: #eceef1; color: var(--muted); cursor: default; }
+  button:disabled { cursor: default; opacity: .55; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin: 6px 0 4px; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; border: 1px solid; }
+  .legend .l-ok::before { border-color: #a9d8b9; }
+  .legend .l-no::before { border-color: #a3a8b1; border-style: dashed; }
+
+  .add-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  select { font: inherit; font-size: 14px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--line); background: #fff; }
+
+  /* Result + log */
+  .result { border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 14px; }
+  .result.ok { background: var(--ok-soft); color: #0f5a2a; }
+  .result.no { background: var(--bad-soft); color: #8a1b12; }
+  .result.idle { background: #f2f3f5; color: var(--muted); }
+  .result strong { display: block; margin-bottom: 2px; }
+  .log { max-height: 260px; overflow-y: auto; font-size: 13px; }
+  .log div { padding: 6px 0; border-top: 1px solid var(--line); }
+  .log .ok::before { content: "✓ "; color: var(--ok); font-weight: 700; }
+  .log .no::before { content: "✗ "; color: var(--bad); font-weight: 700; }
+
+  /* Scenarios */
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
+  .tabs button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .steps { list-style: none; padding: 0; margin: 10px 0 0; }
+  .steps li { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; border-top: 1px solid var(--line); }
+  .steps .n { width: 22px; flex: none; color: var(--muted); font-weight: 600; padding-top: 4px; }
+  .steps .body { flex: 1; }
+  .steps .out { font-size: 13px; margin-top: 4px; }
+  .steps .out.ok { color: var(--ok); }
+  .steps .out.no { color: var(--bad); }
+  .watch { background: var(--accent-soft); border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-top: 8px; }
+
+  /* Move map */
+  .map td, .map th { text-align: center; padding: 5px 4px; font-size: 12px; }
+  .map th.rowh { text-align: left; }
+  .map .y { color: var(--ok); font-weight: 700; }
+  .map .n { color: #c3c7ce; }
+  .map .self { color: #d0d3d9; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="intro">
+    <h1>Application Stage Rules: Prototype</h1>
+    <p class="muted">Applicant Tracking System · throwaway prototype for exploring design decisions</p>
+    <div class="banner"><strong>Nothing here is approved yet.</strong> Options marked <span class="badge">Suggested</span> are only starting points to compare against. Change any rule at any time and the whole page updates instantly.</div>
+    <p><strong>The question:</strong> Which rules should control how staff move an application between hiring stages
+      (Applied → Screening → Interview → Final Review → Offer → Hired, plus Rejected and Withdrawn)?
+      Should staff be able to skip stages, move backward, or reopen an application that's already
+      Hired, Rejected or Withdrawn? And when a job opening closes, should its applications be
+      <em>left unchanged</em> or <em>frozen</em> until the job reopens?</p>
+    <p class="small muted"><strong>How to use:</strong> Pick rules in the panel below. Then either click the stage buttons on any application
+      (free play) or open a guided scenario on the right and press its steps in order. Green-outlined stage buttons are moves
+      the current rules allow. Dashed buttons are blocked. You can still click a blocked button to see the reason.</p>
+  </header>
+
+  <section class="card">
+    <h2>Rules to compare</h2>
+    <div class="rules" id="rules"></div>
+    <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+      <button id="resetRules">Reset rules to suggested</button>
+      <button id="resetData">Reset applications &amp; jobs</button>
+    </div>
+  </section>
+
+  <div class="layout">
+    <main>
+      <section class="card">
+        <h2>Job openings</h2>
+        <div class="jobs" id="jobs"></div>
+      </section>
+
+      <section class="card">
+        <h2>Applications</h2>
+        <div class="legend"><span class="l-ok">Allowed by current rules</span><span class="l-no">Blocked (click to see why)</span></div>
+        <div class="table-scroll"><table id="apps"></table></div>
+      </section>
+
+      <section class="card">
+        <h2>Record a new application</h2>
+        <p class="small muted">New applications always start in <strong>Applied</strong>.</p>
+        <div class="add-row">
+          <select id="addCandidate"></select>
+          <span class="muted">applies for</span>
+          <select id="addJob"></select>
+          <button class="primary" id="addBtn">Record application</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Move map for an open job</h2>
+        <p class="small muted">Which moves the current rules allow, from each stage (rows) to each stage (columns), on a job that's still Open.
+          Switch rules above and watch this change.</p>
+        <div class="table-scroll"><table class="map" id="map"></table></div>
+      </section>
+    </main>
+
+    <aside class="side">
+      <section class="card">
+        <h2>What just happened</h2>
+        <div id="result" class="result idle">Nothing yet. Click a stage button or start a scenario.</div>
+        <h3>Activity log</h3>
+        <div class="log" id="log"></div>
+      </section>
+
+      <section class="card">
+        <h2>Guided scenarios</h2>
+        <p class="small muted">Opening a scenario resets the jobs and applications to a known starting point. Your rule choices stay as they are,
+          so run a scenario, change a rule, press <em>Restart</em>, and compare.</p>
+        <div class="tabs" id="tabs"></div>
+        <div id="scenario"></div>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<!-- ===================== PURE LOGIC (no DOM) ===================== -->
+<script>
+const ATS = (() => {
+  const PIPELINE = ["Applied", "Screening", "Interview", "Final Review", "Offer", "Hired"];
+  const EXITS = ["Rejected", "Withdrawn"];
+  const STAGES = [...PIPELINE, ...EXITS];
+  const FINAL = ["Hired", "Rejected", "Withdrawn"];
+  const isFinal = (s) => FINAL.includes(s);
+
+  const RULES = {
+    skip: {
+      question: "Can staff skip stages going forward?",
+      example: "e.g. Applied → Interview, skipping Screening",
+      options: [
+        { value: "allow", label: "Yes, jump ahead any number of stages", suggested: true },
+        { value: "block", label: "No, one stage at a time" },
+      ],
+    },
+    backward: {
+      question: "Can staff move an application backward?",
+      example: "e.g. Interview → Screening",
+      options: [
+        { value: "any", label: "Yes, to any earlier stage", suggested: true },
+        { value: "oneStep", label: "Only one stage back" },
+        { value: "block", label: "No backward moves" },
+      ],
+    },
+    reopen: {
+      question: "Can a Hired, Rejected or Withdrawn application be reopened?",
+      example: "e.g. undo a rejection made by mistake",
+      options: [
+        { value: "previous", label: "Yes, but only back to the stage it was in before", suggested: true },
+        { value: "any", label: "Yes, to any active stage" },
+        { value: "block", label: "No, final outcomes are permanent" },
+      ],
+    },
+    closeEffect: {
+      question: "When a job closes, what happens to its applications?",
+      example: "applications still in progress",
+      options: [
+        { value: "unchanged", label: "Left unchanged; staff can keep moving them" },
+        { value: "freeze", label: "Frozen; no moves at all until the job reopens" },
+        { value: "freezeExceptExit", label: "Frozen, except staff can still mark them Rejected or Withdrawn", suggested: true },
+      ],
+    },
+    applyToClosed: {
+      question: "Can a new application be recorded for a closed job?",
+      example: "e.g. a late referral",
+      options: [
+        { value: "block", label: "No, only open jobs accept applications", suggested: true },
+        { value: "allow", label: "Yes" },
+      ],
+    },
+  };
+
+  function suggestedRules() {
+    const r = {};
+    for (const [k, def] of Object.entries(RULES)) r[k] = def.options.find((o) => o.suggested).value;
+    return r;
+  }
+
+  function seed() {
+    return {
+      jobs: [
+        { id: "j1", title: "Backend Developer", status: "Open", closedAt: null },
+        { id: "j2", title: "Sales Associate", status: "Open", closedAt: null },
+      ],
+      candidates: [
+        { id: "c1", name: "Maya Patel" },
+        { id: "c2", name: "Jordan Lee" },
+        { id: "c3", name: "Sam Rivera" },
+        { id: "c4", name: "Alex Chen" },
+        { id: "c5", name: "Priya Shah" },
+      ],
+      applications: [
+        { id: "a1", candidateId: "c1", jobId: "j1", stage: "Applied", stageBeforeFinal: null },
+        { id: "a2", candidateId: "c2", jobId: "j1", stage: "Interview", stageBeforeFinal: null },
+        { id: "a3", candidateId: "c3", jobId: "j1", stage: "Offer", stageBeforeFinal: null },
+        { id: "a4", candidateId: "c4", jobId: "j2", stage: "Screening", stageBeforeFinal: null },
+      ],
+      nextAppNum: 5,
+    };
+  }
+
+  const job = (s, id) => s.jobs.find((j) => j.id === id);
+  const cand = (s, id) => s.candidates.find((c) => c.id === id);
+  const app = (s, id) => s.applications.find((a) => a.id === id);
+  const describe = (s, a) => `${cand(s, a.candidateId).name} (${job(s, a.jobId).title})`;
+
+  const yes = (kind, reason) => ({ ok: true, kind, reason });
+  const no = (reason) => ({ ok: false, reason });
+
+  // Core rule check for a single move. jobStatus lets the move map ask hypothetically.
+  function checkStageChange(rules, from, to, jobStatus, stageBeforeFinal) {
+    if (from === to) return no(`Already in ${to}.`);
+    const exiting = EXITS.includes(to);
+
+    if (jobStatus === "Closed") {
+      if (rules.closeEffect === "freeze")
+        return no("The job is closed and closed jobs freeze every move. Reopen the job first.");
+      if (rules.closeEffect === "freezeExceptExit" && !(exiting && !isFinal(from)))
+        return no("The job is closed. The only moves allowed are to Rejected or Withdrawn until it reopens.");
+    }
+
+    if (isFinal(from)) {
+      if (isFinal(to))
+        return no(`${from} and ${to} are both final outcomes. Reopen to an active stage first.`);
+      if (rules.reopen === "block")
+        return no(`${from} is final, and reopening final outcomes is blocked.`);
+      if (rules.reopen === "previous" && to !== stageBeforeFinal)
+        return no(`Can only be reopened to the stage it was in before ${from}${stageBeforeFinal ? ` (${stageBeforeFinal})` : ""}.`);
+      return yes("reopen", `Reopened from ${from} to ${to}.`);
+    }
+
+    if (exiting) return yes("exit", `Marked ${to} (allowed from any active stage).`);
+
+    const d = PIPELINE.indexOf(to) - PIPELINE.indexOf(from);
+    if (d === 1) return yes("forward", `Moved forward one stage to ${to}.`);
+    if (d > 1) {
+      const skipped = PIPELINE.slice(PIPELINE.indexOf(from) + 1, PIPELINE.indexOf(to));
+      if (rules.skip === "block") return no(`That would skip ${skipped.join(", ")}. Moves must go one stage at a time.`);
+      return yes("skip", `Jumped ahead to ${to}, skipping ${skipped.join(", ")}.`);
+    }
+    // backward
+    if (rules.backward === "block") return no("Backward moves are blocked.");
+    if (rules.backward === "oneStep" && d < -1) return no(`That's ${-d} stages back. Only one stage back is allowed.`);
+    return yes("back", `Moved back to ${to}.`);
+  }
+
+  function checkMove(state, rules, appId, to) {
+    const a = app(state, appId);
+    return checkStageChange(rules, a.stage, to, job(state, a.jobId).status, a.stageBeforeFinal);
+  }
+
+  function checkAdd(state, rules, candidateId, jobId) {
+    const j = job(state, jobId);
+    const c = cand(state, candidateId);
+    const existing = state.applications.find((a) => a.candidateId === candidateId && a.jobId === jobId);
+    if (existing)
+      return no(`${c.name} already has an application for ${j.title} (currently ${existing.stage}). Only one application per candidate per opening is allowed.`);
+    if (j.status === "Closed" && rules.applyToClosed === "block")
+      return no(`${j.title} is closed. Only open jobs accept new applications.`);
+    return yes("add", `Recorded ${c.name}'s application for ${j.title}. It starts in Applied.`);
+  }
+
+  // Reducer: (state, rules, action) -> { state, ok, message, changed }
+  function reduce(state, rules, action) {
+    const s = structuredClone(state);
+    switch (action.type) {
+      case "move": {
+        const a = app(s, action.appId);
+        const label = describe(s, a);
+        const check = checkMove(s, rules, action.appId, action.to);
+        if (!check.ok) return { state, ok: false, message: `${label}: ${a.stage} → ${action.to} blocked. ${check.reason}`, changed: [] };
+        const from = a.stage;
+        if (isFinal(action.to) && !isFinal(from)) a.stageBeforeFinal = from;
+        if (!isFinal(action.to)) a.stageBeforeFinal = null;
+        a.stage = action.to;
+        return { state: s, ok: true, message: `${label}: ${from} → ${action.to}. ${check.reason}`, changed: [a.id] };
+      }
+      case "add": {
+        const check = checkAdd(s, rules, action.candidateId, action.jobId);
+        if (!check.ok) return { state, ok: false, message: `Blocked. ${check.reason}`, changed: [] };
+        const id = "a" + s.nextAppNum++;
+        s.applications.push({ id, candidateId: action.candidateId, jobId: action.jobId, stage: "Applied", stageBeforeFinal: null });
+        return { state: s, ok: true, message: check.reason, changed: [id] };
+      }
+      case "closeJob": {
+        const j = job(s, action.jobId);
+        if (j.status === "Closed") return { state, ok: false, message: `${j.title} is already closed.`, changed: [] };
+        j.status = "Closed";
+        j.closedAt = action.now;
+        const active = s.applications.filter((a) => a.jobId === j.id && !isFinal(a.stage)).length;
+        const effect = {
+          unchanged: "Its applications are left as they are, and staff can keep moving them.",
+          freeze: "Its applications are frozen until the job reopens.",
+          freezeExceptExit: "Its applications are frozen, except they can still be marked Rejected or Withdrawn.",
+        }[rules.closeEffect];
+        return { state: s, ok: true, message: `Closed ${j.title} (${active} application${active === 1 ? "" : "s"} still in progress). ${effect}`, changed: s.applications.filter((a) => a.jobId === j.id).map((a) => a.id) };
+      }
+      case "reopenJob": {
+        const j = job(s, action.jobId);
+        if (j.status === "Open") return { state, ok: false, message: `${j.title} is already open.`, changed: [] };
+        j.status = "Open";
+        j.closedAt = null;
+        return { state: s, ok: true, message: `Reopened ${j.title}. The closed date is cleared and no application stages changed.`, changed: s.applications.filter((a) => a.jobId === j.id).map((a) => a.id) };
+      }
+    }
+    return { state, ok: false, message: "Unknown action.", changed: [] };
+  }
+
+  return { PIPELINE, EXITS, STAGES, FINAL, isFinal, RULES, suggestedRules, seed, checkMove, checkAdd, checkStageChange, reduce, job, cand, app };
+})();
+</script>
+
+<!-- ===================== PAGE SHELL ===================== -->
+<script>
+const fmtDate = (iso) => new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+const now = () => new Date().toISOString();
+
+let rules = ATS.suggestedRules();
+let state = ATS.seed();
+let changed = [];
+let lastResult = null;
+let log = [];
+
+// ---------- Scenarios ----------
+const mv = (appId, to) => ({ type: "move", appId, to });
+const add = (candidateId, jobId) => ({ type: "add", candidateId, jobId });
+const closeJob = (jobId) => ({ type: "closeJob", jobId });
+const reopenJob = (jobId) => ({ type: "reopenJob", jobId });
+
+const SCENARIOS = [
+  {
+    name: "Normal path",
+    desc: "Maya applied for Backend Developer. Walk her through every stage to Hired, then try to send her back to Interview.",
+    watch: "Every forward step should work under any rules. The last step tests whether Hired is really final. Compare the three reopen options.",
+    setup: () => ATS.seed(),
+    steps: [
+      ["Move Maya to Screening", mv("a1", "Screening")],
+      ["Move Maya to Interview", mv("a1", "Interview")],
+      ["Move Maya to Final Review", mv("a1", "Final Review")],
+      ["Move Maya to Offer", mv("a1", "Offer")],
+      ["Move Maya to Hired", mv("a1", "Hired")],
+      ["Try moving Maya (Hired) back to Interview", mv("a1", "Interview")],
+    ],
+  },
+  {
+    name: "Skip & backward",
+    desc: "Staff want to fast-track some candidates and send others back for another look.",
+    watch: "Switch “skip stages” and “backward” between options and restart. Do the blocked cases feel protective or just annoying?",
+    setup: () => ATS.seed(),
+    steps: [
+      ["Move Maya Applied → Interview (skips Screening)", mv("a1", "Interview")],
+      ["Move Alex Screening → Offer (skips two stages)", mv("a4", "Offer")],
+      ["Move Jordan Interview → Screening (one stage back)", mv("a2", "Screening")],
+      ["Move Sam Offer → Applied (several stages back)", mv("a3", "Applied")],
+    ],
+  },
+  {
+    name: "Reject / withdraw, then reopen",
+    desc: "Jordan is rejected and Alex withdraws. Later, staff want to bring them back.",
+    watch: "With “previous stage only”, Jordan can go back to Interview but Alex can't jump to Final Review. With “any active stage”, both work. With “permanent”, neither does.",
+    setup: () => ATS.seed(),
+    steps: [
+      ["Reject Jordan (currently Interview)", mv("a2", "Rejected")],
+      ["Try reopening Jordan to Interview", mv("a2", "Interview")],
+      ["Alex withdraws (currently Screening)", mv("a4", "Withdrawn")],
+      ["Try reopening Alex to Final Review", mv("a4", "Final Review")],
+      ["Try switching Jordan straight from a final outcome to Withdrawn", mv("a2", "Withdrawn")],
+    ],
+  },
+  {
+    name: "Correcting mistakes",
+    desc: "A staff member clicks the wrong stage a few times and needs to fix it.",
+    watch: "Strict rules block mistakes but also block their corrections. Try “one stage at a time” plus “no backward moves” to see how stuck staff get.",
+    setup: () => ATS.seed(),
+    steps: [
+      ["Oops: Jordan Interview → Final Review (meant to leave in Interview)", mv("a2", "Final Review")],
+      ["Fix: move Jordan back to Interview", mv("a2", "Interview")],
+      ["Oops: Sam Offer → Rejected (meant to click Hired)", mv("a3", "Rejected")],
+      ["Fix: reopen Sam to Offer", mv("a3", "Offer")],
+      ["Then: move Sam to Hired", mv("a3", "Hired")],
+      ["Oops: Alex Screening → Offer (wrong row)", mv("a4", "Offer")],
+      ["Fix: move Alex back to Screening", mv("a4", "Screening")],
+    ],
+  },
+  {
+    name: "Close with apps in progress",
+    desc: "Backend Developer closes while Maya (Applied), Jordan (Interview) and Sam (Offer) are still in progress. Alex's Sales Associate job stays open.",
+    watch: "Compare the three closing behaviors. Should staff still be able to finish Sam's hire or reject the leftovers after closing?",
+    setup: () => ATS.seed(),
+    steps: [
+      ["Close Backend Developer", closeJob("j1")],
+      ["Try moving Maya to Screening", mv("a1", "Screening")],
+      ["Try rejecting Jordan", mv("a2", "Rejected")],
+      ["Try moving Sam (Offer) to Hired", mv("a3", "Hired")],
+      ["Move Alex (open Sales job) to Interview", mv("a4", "Interview")],
+    ],
+  },
+  {
+    name: "Apply to a closed job",
+    desc: "Priya is referred after Backend Developer has already closed.",
+    watch: "Compare the “new application for a closed job” options. Sales Associate is open, so that one should always work.",
+    setup: () => ATS.seed(),
+    steps: [
+      ["Close Backend Developer", closeJob("j1")],
+      ["Try recording Priya for Backend Developer", add("c5", "j1")],
+      ["Record Priya for Sales Associate", add("c5", "j2")],
+    ],
+  },
+  {
+    name: "Reopen the job",
+    desc: "Backend Developer was closed on Oct 20 with applications in different stages. Jordan was rejected before it closed. Now the hire fell through and the job reopens.",
+    watch: "Reopening clears the closed date. Applications keep whatever stage they had, nothing resets, and frozen ones can move again.",
+    setup: () => {
+      const s = ATS.seed();
+      const j = s.jobs.find((x) => x.id === "j1");
+      j.status = "Closed"; j.closedAt = "2026-10-20T15:00:00";
+      const jordan = s.applications.find((a) => a.id === "a2");
+      jordan.stage = "Rejected"; jordan.stageBeforeFinal = "Interview";
+      return s;
+    },
+    steps: [
+      ["Try moving Maya to Screening while the job is closed", mv("a1", "Screening")],
+      ["Reopen Backend Developer", reopenJob("j1")],
+      ["Move Maya to Screening", mv("a1", "Screening")],
+      ["Try reopening Jordan (Rejected) to Interview", mv("a2", "Interview")],
+      ["Record Priya for Backend Developer", add("c5", "j1")],
+      ["Close Backend Developer again (new closed date)", closeJob("j1")],
+    ],
+  },
+  {
+    name: "Duplicate application",
+    desc: "Staff try to record a second application for the same candidate and opening. This rule is required, so it's always enforced.",
+    watch: "Notice step 5: Jordan was rejected, but a new application for the same job is still a duplicate. Bringing Jordan back would mean reopening the old application. Is that OK?",
+    setup: () => ATS.seed(),
+    steps: [
+      ["Try recording Maya for Backend Developer again", add("c1", "j1")],
+      ["Record Maya for Sales Associate", add("c1", "j2")],
+      ["Try recording Maya for Sales Associate a second time", add("c1", "j2")],
+      ["Reject Jordan for Backend Developer", mv("a2", "Rejected")],
+      ["Try recording Jordan for Backend Developer again", add("c2", "j1")],
+    ],
+  },
+];
+
+let activeScenario = 0;
+let stepIndex = 0;
+let stepResults = [];
+
+// ---------- Actions ----------
+function dispatch(action, source) {
+  const full = (action.type === "closeJob") ? { ...action, now: now() } : action;
+  const r = ATS.reduce(state, rules, full);
+  state = r.state;
+  changed = r.changed;
+  lastResult = r;
+  log.unshift({ ok: r.ok, message: r.message, source });
+  render();
+  return r;
+}
+
+function startScenario(i) {
+  activeScenario = i;
+  stepIndex = 0;
+  stepResults = [];
+  state = SCENARIOS[i].setup();
+  changed = [];
+  lastResult = null;
+  log.unshift({ ok: true, message: `Started scenario “${SCENARIOS[i].name}” (jobs and applications reset).`, source: "scenario" });
+  render();
+}
+
+function runStep(i) {
+  const r = dispatch(SCENARIOS[activeScenario].steps[i][1], "scenario");
+  stepResults[i] = r;
+  stepIndex = i + 1;
+  render();
+}
+
+// ---------- Rendering ----------
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function renderRules() {
+  const el = document.getElementById("rules");
+  let html = "";
+  for (const [key, def] of Object.entries(ATS.RULES)) {
+    html += `<div class="rule"><div class="q">${esc(def.question)}</div><div class="small muted" style="margin-bottom:4px">${esc(def.example)}</div>`;
+    for (const o of def.options) {
+      html += `<label><input type="radio" name="${key}" value="${o.value}" ${rules[key] === o.value ? "checked" : ""}>
+        <span>${esc(o.label)}${o.suggested ? '<span class="badge">Suggested</span>' : ""}</span></label>`;
+    }
+    html += `</div>`;
+  }
+  html += `<div class="rule fixed"><div class="q">Fixed (not adjustable here)</div><ul>
+    <li>One application per candidate per opening (requirement)</li>
+    <li>New applications start in Applied</li>
+    <li>Rejected or Withdrawn can be chosen from any active stage (unless a closed job blocks it)</li>
+    <li>Job status: starts Open, can close and reopen; closing records the date, reopening clears it</li></ul></div>`;
+  el.innerHTML = html;
+  el.querySelectorAll("input[type=radio]").forEach((inp) =>
+    inp.addEventListener("change", () => {
+      rules[inp.name] = inp.value;
+      log.unshift({ ok: true, message: `Rule changed: “${ATS.RULES[inp.name].question}” → ${ATS.RULES[inp.name].options.find((o) => o.value === inp.value).label}.`, source: "rule" });
+      render();
+    })
+  );
+}
+
+function render() {
+  // Jobs
+  document.getElementById("jobs").innerHTML = state.jobs.map((j) => {
+    const apps = state.applications.filter((a) => a.jobId === j.id);
+    const active = apps.filter((a) => !ATS.isFinal(a.stage)).length;
+    return `<div class="job">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+        <span class="title">${esc(j.title)}</span><span class="status ${j.status}">${j.status}</span></div>
+      <div class="small muted" style="margin:6px 0 10px">
+        Closed date: ${j.closedAt ? fmtDate(j.closedAt) : "—"}<br>
+        Applications: ${apps.length} (${active} in progress)</div>
+      ${j.status === "Open"
+        ? `<button data-close="${j.id}">Close job</button>`
+        : `<button data-reopen="${j.id}">Reopen job</button>`}
+    </div>`;
+  }).join("");
+  document.querySelectorAll("[data-close]").forEach((b) => b.onclick = () => dispatch(closeJob(b.dataset.close), "free play"));
+  document.querySelectorAll("[data-reopen]").forEach((b) => b.onclick = () => dispatch(reopenJob(b.dataset.reopen), "free play"));
+
+  // Applications
+  let rows = `<tr><th>Candidate</th><th>Opening</th><th>Stage</th><th>Move to…</th></tr>`;
+  for (const a of state.applications) {
+    const j = ATS.job(state, a.jobId);
+    const c = ATS.cand(state, a.candidateId);
+    const buttons = ATS.STAGES.map((s) => {
+      if (s === a.stage) return `<button class="current" disabled>${s}</button>`;
+      const chk = ATS.checkMove(state, rules, a.id, s);
+      return `<button class="${chk.ok ? "allowed" : "blocked"}" title="${esc(chk.reason)}" data-app="${a.id}" data-to="${s}">${s}</button>`;
+    }).join("");
+    rows += `<tr class="${changed.includes(a.id) ? "changed" : ""}">
+      <td>${esc(c.name)}</td>
+      <td>${esc(j.title)}${j.status === "Closed" ? ' <span class="status Closed">Closed</span>' : ""}</td>
+      <td><span class="stage ${ATS.isFinal(a.stage) ? "final" : ""}">${a.stage}</span>
+        ${a.stageBeforeFinal ? `<div class="small muted">was ${a.stageBeforeFinal}</div>` : ""}</td>
+      <td><div class="moves">${buttons}</div></td></tr>`;
+  }
+  const appsEl = document.getElementById("apps");
+  appsEl.innerHTML = rows;
+  appsEl.querySelectorAll("[data-app]").forEach((b) => b.onclick = () => dispatch(mv(b.dataset.app, b.dataset.to), "free play"));
+
+  // Add form (preserve selection)
+  const ac = document.getElementById("addCandidate"), aj = document.getElementById("addJob");
+  const prevC = ac.value, prevJ = aj.value;
+  ac.innerHTML = state.candidates.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+  aj.innerHTML = state.jobs.map((j) => `<option value="${j.id}">${esc(j.title)}${j.status === "Closed" ? " (Closed)" : ""}</option>`).join("");
+  if (prevC) ac.value = prevC;
+  if (prevJ) aj.value = prevJ;
+
+  // Move map
+  let map = `<tr><th class="rowh">From \\ To</th>${ATS.STAGES.map((s) => `<th>${s}</th>`).join("")}</tr>`;
+  for (const from of ATS.STAGES) {
+    const before = ATS.isFinal(from) ? "Interview" : null; // assumes it was in Interview before a final outcome
+    map += `<tr><th class="rowh">${from}</th>${ATS.STAGES.map((to) => {
+      if (from === to) return `<td class="self">·</td>`;
+      const chk = ATS.checkStageChange(rules, from, to, "Open", before);
+      return `<td class="${chk.ok ? "y" : "n"}" title="${esc(chk.reason)}">${chk.ok ? "✓" : "✗"}</td>`;
+    }).join("")}</tr>`;
+  }
+  document.getElementById("map").innerHTML = map +
+    `<tr><td colspan="9" class="small muted" style="text-align:left">For final-outcome rows, the map assumes the application was in Interview before it ended.</td></tr>`;
+
+  // Result + log
+  const res = document.getElementById("result");
+  if (!lastResult) { res.className = "result idle"; res.textContent = "Nothing yet. Click a stage button or start a scenario."; }
+  else {
+    res.className = "result " + (lastResult.ok ? "ok" : "no");
+    res.innerHTML = `<strong>${lastResult.ok ? "Allowed" : "Blocked"}</strong>${esc(lastResult.message)}`;
+  }
+  document.getElementById("log").innerHTML = log.slice(0, 60).map((l) =>
+    `<div class="${l.ok ? "ok" : "no"}"><span class="muted">[${l.source}]</span> ${esc(l.message)}</div>`).join("");
+
+  // Scenarios
+  document.getElementById("tabs").innerHTML = SCENARIOS.map((s, i) =>
+    `<button class="${i === activeScenario ? "active" : ""}" data-tab="${i}">${i + 1}. ${esc(s.name)}</button>`).join("");
+  document.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => startScenario(+b.dataset.tab));
+
+  const sc = SCENARIOS[activeScenario];
+  document.getElementById("scenario").innerHTML = `
+    <p><strong>${esc(sc.name)}</strong></p>
+    <p class="small">${esc(sc.desc)}</p>
+    <div class="watch"><strong>Watch for:</strong> ${esc(sc.watch)}</div>
+    <ol class="steps">${sc.steps.map(([label], i) => {
+      const r = stepResults[i];
+      return `<li><span class="n">${i + 1}</span><div class="body">
+        <button class="${i === stepIndex ? "primary" : ""}" data-step="${i}" ${i === stepIndex ? "" : "disabled"}>${esc(label)}</button>
+        ${r ? `<div class="out ${r.ok ? "ok" : "no"}">${r.ok ? "✓ Allowed" : "✗ Blocked"}: ${esc(r.message)}</div>` : ""}
+      </div></li>`;
+    }).join("")}</ol>
+    <div style="margin-top:10px"><button data-restart>Restart scenario</button>
+      ${stepIndex >= sc.steps.length ? '<span class="small muted" style="margin-left:8px">Done. Change a rule and restart to compare.</span>' : ""}</div>`;
+  document.querySelectorAll("[data-step]").forEach((b) => b.onclick = () => runStep(+b.dataset.step));
+  document.querySelector("[data-restart]").onclick = () => startScenario(activeScenario);
+}
+
+document.getElementById("addBtn").onclick = () =>
+  dispatch(add(document.getElementById("addCandidate").value, document.getElementById("addJob").value), "free play");
+document.getElementById("resetRules").onclick = () => { rules = ATS.suggestedRules(); log.unshift({ ok: true, message: "Rules reset to suggested.", source: "rule" }); renderRules(); render(); };
+document.getElementById("resetData").onclick = () => { state = ATS.seed(); changed = []; lastResult = null; stepIndex = 0; stepResults = []; log.unshift({ ok: true, message: "Jobs and applications reset.", source: "reset" }); render(); };
+
+renderRules();
+startScenario(0);
+</script>
+</body>
+</html>
