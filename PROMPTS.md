@@ -28,6 +28,109 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 4: Closing and reopening jobs
+
+### Prompts
+
+1. **Start Phase 4 (`/implement`).**
+   > /implement @prd/applicant-tracking-system.md @plans/applicant-tracking-system.md implement Phase 4 only
+   >
+   > Read CLAUDE.md and follow the implement and tdd skills. Propose the TDD candidates, explain them in beginner-friendly language, and wait for my approval before writing code.
+   >
+   > After automated checks pass, give me browser verification steps and wait for my confirmation. Don't mark the phase complete, commit, push, or start Phase 5 yet.
+
+2. **Approve all three candidates and add a GET-reopen test.**
+   > I approve all three candidates. Also include an ordinary test confirming that a GET request cannot reopen a job, since reopening must use POST too.
+   >
+   > Start with candidate 1. Show me the test and its RED result, then stop for approval before implementing the behavior. If anything already passes, report that honestly rather than manufacturing a failure.
+
+3. **Approve test 1 (closing needs the confirmation page and a POST).**
+   > I approve this test. Implement close_job in services.py and call it from the POST path, keeping GET read-only. Show me the GREEN result and regression results, then stop before candidate 2.
+
+4. **Close-again no-op, then start test 2.**
+   > Yes, the closing behavior looks correct. Make closing an already-closed job a no-op that preserves closed_at and updated_at, and cover that with an ordinary test.
+   >
+   > Proceed to candidate 2 for reopening. Show me its test and RED result, then stop for approval before implementing it.
+
+5. **Approve test 2 (reopening), with a reopen-again no-op.**
+   > I approve candidate 2's test. Implement reopen_job in services.py and call it from the POST-only view.
+   >
+   > Also make reopening an already-open job preserve updated_at, covered by an ordinary test. Show me the GREEN result and regression results, then stop before candidate 3.
+
+6. **Start test 3 (`next` return address).**
+   > Yes, proceed to candidate 3 for the next return address. Show me the test and RED result, then stop for approval before implementing the redirect handling.
+
+7. **Approve test 3.**
+   > I approve candidate 3's test. Use Django's url_has_allowed_host_and_scheme with the current request host to validate next, falling back to job detail.
+   >
+   > Show me the GREEN result and full regression results, then stop before continuing with the remaining Phase 4 work.
+
+8. **Continue with the rest of Phase 4.**
+   > Yes, continue with the remaining Phase 4 work as listed. Validate the Cancel return address too, and test that next survives the confirmation-page GET through the form POST.
+   >
+   > Run all planned checks, then give me the browser verification steps. Wait for my confirmation before marking Phase 4 complete, committing, pushing, or starting Phase 5.
+
+9. **Browser checks passed; mark complete and propose CLAUDE.md.**
+   > Phase 4 manual verification passed: closing requires confirmation and POST, closed-list behavior, editing while closed preserves the closed date, reopening clears it, external next addresses are rejected, local next is preserved, GET cannot reopen, and the dark narrow-screen layout works.
+   >
+   > Mark Phase 4 complete. Show me any proposed CLAUDE.md updates, limited to concise, durable conventions established and verified in this phase. If nothing needs adding, say so.
+   >
+   > Don't commit or start Phase 5 yet.
+
+10. **Correction: approve CLAUDE.md with my services line, and write this log.**
+    > I approve these changes with one adjustment. Use this services line:
+    >
+    > - hiring/services.py: shared hiring operations; the close and reopen views use it for job status changes.
+    >
+    > Keep the confirmation and next-address guidance as proposed.
+    >
+    > Apply the updates, then write this session log to PROMPTS.md according to its instructions. Include the three RED-to-GREEN tests, no-op behavior for repeated actions, and completed browser checks.
+    >
+    > Show me the changed-file summary and proposed commit message before committing. Don't start Phase 5.
+
+### Summary
+
+- **Outcome:**
+  - **Services:** new `hiring/services.py` with `close_job(job)` (sets Closed and `closed_at = timezone.now()`) and `reopen_job(job)` (sets Open and clears `closed_at`). Both save only `status`, `closed_at` and `updated_at`. No migration was needed: the fields came in Phase 3.
+  - **No-op repeats:** closing an already-Closed job changes nothing, keeping the original `closed_at` and `updated_at`. Reopening an already-Open job changes nothing, keeping `updated_at`. This covers stale pages and double submits. Each has an ordinary test.
+  - **Views and URLs:**
+    - `/jobs/<pk>/close/` shows a confirmation page on GET and closes on POST.
+    - `/jobs/<pk>/reopen/` is POST-only (`@require_POST`), so a GET gets a 405 response.
+    - Both redirect through a `_next_or()` helper. It follows `next` only when `url_has_allowed_host_and_scheme` accepts it for `request.get_host()`, with HTTPS required only when the request is HTTPS. Otherwise it falls back to job detail.
+  - **Confirmation page:**
+    - Shows the active-applications count (0 until Phase 7).
+    - Explains that stages stay unchanged, only Reject and Mark withdrawn remain available, and new applications are blocked.
+    - Carries a validated `?next=` in a hidden field, and sends Cancel to the same validated address or to job detail.
+  - **Job detail:** shows Close job for Open jobs and a Reopen job POST form for Closed jobs. The closed date was already shown on detail and in the list from Phase 3, and is now tested in Central time.
+  - **TDD test 1** (closing needs the confirmation page and a POST): RED with `assert 'open' == JobOpening.Status.CLOSED` after scaffolding a display-only view. The GET checks in the same test passed from the start, only because the scaffold changed nothing. The agent reported this rather than claiming them as RED. Adding `close_job` and calling it on POST made it GREEN.
+  - **TDD test 2** (reopening sets Open and clears `closed_at`): RED with `assert 'closed' == JobOpening.Status.OPEN` after scaffolding a POST-only view that only redirected. Adding `reopen_job` made it GREEN.
+  - **TDD test 3** (close and reopen follow only a same-site `next`): parametrized over both actions and three addresses (`/jobs/?status=closed`, `https://evil.example.com/`, `//evil.example.com/`). RED in the two same-site cases with `assert '/jobs/1/' == '/jobs/?status=closed'`. The four off-site cases passed from the start because the views ignored `next`, which the agent reported. Adding `_next_or()` made all six GREEN, with the off-site cases now passing because the address is checked.
+  - **All three were genuine RED-to-GREEN cycles.**
+  - **Ordinary tests:** 13 more test functions (15 cases), covering:
+    - close-again and reopen-again no-ops
+    - a GET to reopen returning 405 and leaving the job Closed
+    - the confirmation page's explanation text
+    - `next` surviving from the confirmation page's GET, through its hidden field, to the POST redirect
+    - Cancel following a same-site `next`, and a missing or off-site `next` being dropped from both the hidden field and Cancel
+    - which button job detail shows for each status
+    - editing a closed job's details and skills keeping status and `closed_at` while updating last-updated
+    - the closed date in Central time on detail and in the Closed list
+  - **Automated checks:** 101 tests passed. `ruff check`, `ruff format --check` and `makemigrations --check` were clean. `tailwind build` succeeded.
+  - **Browser checks (by me):** all passed. They covered closing through confirmation and POST, closed-list behavior, editing while closed keeping the closed date, reopening clearing it, external `next` addresses being rejected, a local `next` being preserved, GET not being able to reopen, and the dark narrow-screen layout.
+  - **Docs:** Phase 4's acceptance criteria are ticked in the plan. CLAUDE.md's Project layout gained the `services.py` line. Conventions now cover confirmation pages (delete, close) with POST-only actions (reopen), and the validated `next` rule, including the hidden field and Cancel.
+- **Deviations:**
+  - **GET-reopen test:** I added an ordinary test that a GET can't reopen a job.
+  - **No-op scope:** the agent suggested making a repeat close keep `closed_at`. I also required it to keep `updated_at`, and asked for the same on reopening an already-open job.
+  - **Cancel and `next` carry-through:** I required Cancel to use the validated address too, and a test that `next` survives from the confirmation page's GET through the form POST.
+  - **CLAUDE.md wording:** I replaced the agent's `services.py` line with my own. The agent's proposal said views *and admin* call the services, which goes beyond what exists so far.
+- **Sideways:**
+  - **Early passes:** parts of tests 1 and 3 passed before the behavior existed, as described above. They were reported, not hidden, and become real guards once the code exists.
+  - **No-op tests not run RED:** the no-op checks were added together with their tests, as ordinary work, so those tests weren't seen failing first. The agent said so.
+  - **Nonexistent method:** while implementing test 3, the agent first wrote `job.get_absolute_url()`, which `JobOpening` doesn't define. It caught this before running anything and used `reverse("hiring:job_detail", ...)` instead.
+  - **Ambiguous edit:** one test-file edit failed because its target text appeared three times. It was redone with more context. Mechanical, no effect on the tests.
+  - **Formatter:** `ruff format --check` flagged one line in test 3 that fit on one line. `ruff format` rewrapped it, with no change to what it asserts.
+  - **Skill lookup:** `/implement` isn't one of the session's registered skills, so the agent read `.claude/skills/implement/SKILL.md` directly.
+
 ## 2026-11-01 — Phase 3 follow-up: commit retry and push
 
 ### Prompts

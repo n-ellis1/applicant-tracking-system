@@ -6,6 +6,7 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 from django.contrib.auth.models import User
 from django.urls import reverse
+from django.utils import timezone
 
 from hiring.models import JobOpening, Skill
 from hiring.tests.helpers import make_job
@@ -350,6 +351,234 @@ def test_confirming_delete_removes_the_job_and_keeps_its_skills(employee_client)
     assert response.url == reverse("hiring:job_list")
     assert not JobOpening.objects.exists()
     assert Skill.objects.filter(pk=skill.pk).exists()
+
+
+# Closing and reopening
+
+
+def test_closing_a_job_needs_the_confirmation_page_and_a_post(employee_client):
+    job = make_job()
+    url = reverse("hiring:job_close", args=[job.pk])
+
+    page = employee_client.get(url)
+
+    job.refresh_from_db()
+    assert page.status_code == 200
+    assert job.status == JobOpening.Status.OPEN
+    assert job.closed_at is None
+
+    before = timezone.now()
+    employee_client.post(url)
+
+    job.refresh_from_db()
+    assert job.status == CLOSED
+    assert job.closed_at is not None
+    assert before <= job.closed_at <= timezone.now()
+
+
+def test_closing_an_already_closed_job_changes_nothing(employee_client):
+    closed_at = datetime(2026, 3, 1, tzinfo=UTC)
+    updated_at = datetime(2026, 3, 2, tzinfo=UTC)
+    job = make_job(status=CLOSED)
+    JobOpening.objects.filter(pk=job.pk).update(
+        closed_at=closed_at, updated_at=updated_at
+    )
+
+    employee_client.post(reverse("hiring:job_close", args=[job.pk]))
+
+    job.refresh_from_db()
+    assert job.status == CLOSED
+    assert job.closed_at == closed_at
+    assert job.updated_at == updated_at
+
+
+def test_reopening_a_job_sets_it_open_and_clears_the_closed_date(employee_client):
+    job = make_job(status=CLOSED, closed_at=datetime(2026, 3, 1, tzinfo=UTC))
+
+    employee_client.post(reverse("hiring:job_reopen", args=[job.pk]))
+
+    job.refresh_from_db()
+    assert job.status == JobOpening.Status.OPEN
+    assert job.closed_at is None
+
+
+def test_reopening_an_already_open_job_changes_nothing(employee_client):
+    updated_at = datetime(2026, 3, 2, tzinfo=UTC)
+    job = make_job()
+    JobOpening.objects.filter(pk=job.pk).update(updated_at=updated_at)
+
+    employee_client.post(reverse("hiring:job_reopen", args=[job.pk]))
+
+    job.refresh_from_db()
+    assert job.status == JobOpening.Status.OPEN
+    assert job.closed_at is None
+    assert job.updated_at == updated_at
+
+
+def test_a_get_request_cannot_reopen_a_job(employee_client):
+    closed_at = datetime(2026, 3, 1, tzinfo=UTC)
+    job = make_job(status=CLOSED, closed_at=closed_at)
+
+    response = employee_client.get(reverse("hiring:job_reopen", args=[job.pk]))
+
+    job.refresh_from_db()
+    assert response.status_code == 405
+    assert job.status == CLOSED
+    assert job.closed_at == closed_at
+
+
+@pytest.mark.parametrize(
+    ("action", "starting_status"),
+    [("hiring:job_close", JobOpening.Status.OPEN), ("hiring:job_reopen", CLOSED)],
+)
+@pytest.mark.parametrize(
+    ("next_url", "same_site"),
+    [
+        ("/jobs/?status=closed", True),
+        ("https://evil.example.com/", False),
+        ("//evil.example.com/", False),
+    ],
+)
+def test_close_and_reopen_return_only_to_a_same_site_next(
+    employee_client, action, starting_status, next_url, same_site
+):
+    job = make_job(status=starting_status)
+
+    response = employee_client.post(reverse(action, args=[job.pk]), {"next": next_url})
+
+    job_detail = reverse("hiring:job_detail", args=[job.pk])
+    assert response.status_code == 302
+    assert response.url == (next_url if same_site else job_detail)
+
+
+def hidden_next(content):
+    """The value of the rendered hidden next field, or None if there isn't one."""
+    match = re.search(r'<input type="hidden" name="next" value="([^"]*)"', content)
+    return unescape(match.group(1)) if match else None
+
+
+def cancel_link(content):
+    match = re.search(r'<a href="([^"]*)" class="btn btn-ghost">Cancel</a>', content)
+    return unescape(match.group(1))
+
+
+def test_close_page_explains_the_effects_on_applications(employee_client):
+    job = make_job()
+
+    content = employee_client.get(
+        reverse("hiring:job_close", args=[job.pk])
+    ).content.decode()
+
+    assert "Backend Developer" in content
+    assert "<strong>0</strong> active applications" in content
+    assert "keep their current stages" in content
+    assert "Only Reject and Mark withdrawn remain available" in content
+    assert "New applications are blocked" in content
+
+
+def test_next_survives_from_the_close_page_through_the_post(employee_client):
+    job = make_job()
+    next_url = "/jobs/?status=closed&q=data"
+
+    page = employee_client.get(
+        reverse("hiring:job_close", args=[job.pk]), {"next": next_url}
+    )
+    carried = hidden_next(page.content.decode())
+    response = employee_client.post(
+        reverse("hiring:job_close", args=[job.pk]), {"next": carried}
+    )
+
+    assert carried == next_url
+    assert response.url == next_url
+    job.refresh_from_db()
+    assert job.status == CLOSED
+
+
+def test_close_page_cancel_returns_to_a_same_site_next(employee_client):
+    job = make_job()
+
+    content = employee_client.get(
+        reverse("hiring:job_close", args=[job.pk]), {"next": "/jobs/?status=all"}
+    ).content.decode()
+
+    assert cancel_link(content) == "/jobs/?status=all"
+
+
+@pytest.mark.parametrize(
+    "next_url", [None, "https://evil.example.com/", "//evil.example.com/"]
+)
+def test_close_page_drops_a_missing_or_off_site_next(employee_client, next_url):
+    job = make_job()
+    query = {"next": next_url} if next_url else {}
+
+    content = employee_client.get(
+        reverse("hiring:job_close", args=[job.pk]), query
+    ).content.decode()
+
+    assert hidden_next(content) is None
+    assert cancel_link(content) == reverse("hiring:job_detail", args=[job.pk])
+    assert "evil.example.com" not in content
+
+
+def test_open_job_detail_offers_close_and_not_reopen(employee_client):
+    job = make_job()
+
+    content = employee_client.get(
+        reverse("hiring:job_detail", args=[job.pk])
+    ).content.decode()
+
+    assert f'href="{reverse("hiring:job_close", args=[job.pk])}"' in content
+    assert reverse("hiring:job_reopen", args=[job.pk]) not in content
+
+
+def test_closed_job_detail_offers_reopen_as_a_post_and_not_close(employee_client):
+    job = make_job(status=CLOSED, closed_at=datetime(2026, 3, 1, tzinfo=UTC))
+
+    content = employee_client.get(
+        reverse("hiring:job_detail", args=[job.pk])
+    ).content.decode()
+
+    reopen = reverse("hiring:job_reopen", args=[job.pk])
+    assert f'<form method="post" action="{reopen}">' in content
+    assert reverse("hiring:job_close", args=[job.pk]) not in content
+
+
+def test_editing_a_closed_job_keeps_status_and_closed_date(employee_client):
+    python = Skill.objects.create(name="Python")
+    go = Skill.objects.create(name="Go")
+    closed_at = datetime(2026, 3, 1, tzinfo=UTC)
+    earlier = datetime(2026, 3, 2, tzinfo=UTC)
+    job = make_job(status=CLOSED, closed_at=closed_at)
+    job.skills.add(python)
+    JobOpening.objects.filter(pk=job.pk).update(updated_at=earlier)
+
+    response = employee_client.post(
+        reverse("hiring:job_edit", args=[job.pk]),
+        VALID_JOB | {"description": "Builds better APIs.", "skills": [go.pk]},
+    )
+
+    assert response.status_code == 302
+    job.refresh_from_db()
+    assert job.description == "Builds better APIs."
+    assert list(job.skills.all()) == [go]
+    assert job.status == CLOSED
+    assert job.closed_at == closed_at
+    assert job.updated_at > earlier
+
+
+def test_closed_date_shows_in_central_time_on_detail_and_list(employee_client):
+    # 03:00 UTC on Mar 1 is still Feb 28 in Central time.
+    job = make_job(status=CLOSED, closed_at=datetime(2026, 3, 1, 3, 0, tzinfo=UTC))
+
+    detail = employee_client.get(
+        reverse("hiring:job_detail", args=[job.pk])
+    ).content.decode()
+    listing = employee_client.get(
+        reverse("hiring:job_list"), {"status": "closed"}
+    ).content.decode()
+
+    assert "Feb 28, 2026, 9:00 PM CST" in detail
+    assert "<td>Feb 28, 2026</td>" in listing
 
 
 # Django admin uses the same fields and validation.

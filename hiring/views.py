@@ -3,7 +3,11 @@ from urllib.parse import urlencode
 from django.core.paginator import Paginator
 from django.db.models import ProtectedError
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_POST
 
+from . import services
 from .forms import JobOpeningForm, SkillForm
 from .models import JobOpening, Skill
 
@@ -106,6 +110,44 @@ def job_delete(request, pk):
         "hiring/job_confirm_delete.html",
         {"job": job, "active_nav": "jobs"},
     )
+
+
+def _next_or(request, default):
+    # Only follow a return address on this site, never an external one.
+    next_url = request.POST.get("next") or request.GET.get("next", "")
+    if url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return next_url
+    return default
+
+
+def job_close(request, pk):
+    job = get_object_or_404(JobOpening, pk=pk)
+    job_detail = reverse("hiring:job_detail", args=[pk])
+    if request.method == "POST":
+        services.close_job(job)
+        return redirect(_next_or(request, job_detail))
+    next_url = _next_or(request, "")
+    return render(
+        request,
+        "hiring/job_confirm_close.html",
+        {
+            "job": job,
+            # Applications arrive in a later phase.
+            "active_count": 0,
+            "next": next_url,
+            "cancel_url": next_url or job_detail,
+            "active_nav": "jobs",
+        },
+    )
+
+
+@require_POST
+def job_reopen(request, pk):
+    job = get_object_or_404(JobOpening, pk=pk)
+    services.reopen_job(job)
+    return redirect(_next_or(request, reverse("hiring:job_detail", args=[pk])))
 
 
 # Skills

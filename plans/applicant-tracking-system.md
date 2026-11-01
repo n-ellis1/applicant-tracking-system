@@ -219,11 +219,11 @@ Deleting a skill used by any job is blocked in the app, in the model's `delete()
 
 ### Acceptance criteria
 
-- [ ] Closing requires the confirmation page and a POST. A GET never closes the job.
-- [ ] Closing sets status Closed and `closed_at`. Reopening sets Open and clears `closed_at`.
-- [ ] Both actions redirect to a same-site `next` address, and an off-site `next` falls back to job detail.
-- [ ] Editing a closed job's details and skills leaves status and `closed_at` unchanged and updates last-updated.
-- [ ] The jobs list and detail show the closed date.
+- [x] Closing requires the confirmation page and a POST. A GET never closes the job.
+- [x] Closing sets status Closed and `closed_at`. Reopening sets Open and clears `closed_at`.
+- [x] Both actions redirect to a same-site `next` address, and an off-site `next` falls back to job detail.
+- [x] Editing a closed job's details and skills leaves status and `closed_at` unchanged and updates last-updated.
+- [x] The jobs list and detail show the closed date.
 
 ### Possible TDD candidates (not approved)
 

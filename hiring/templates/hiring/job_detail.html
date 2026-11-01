@@ -9,6 +9,14 @@
       <span class="badge {% if job.status == 'open' %}badge-success{% else %}badge-neutral{% endif %}">{{ job.get_status_display }}</span>
     </div>
     <div class="flex flex-wrap gap-2">
+      {% if job.status == 'open' %}
+        <a href="{% url 'hiring:job_close' job.pk %}" class="btn btn-outline btn-warning">Close job</a>
+      {% else %}
+        <form method="post" action="{% url 'hiring:job_reopen' job.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline btn-success">Reopen job</button>
+        </form>
+      {% endif %}
       <a href="{% url 'hiring:job_edit' job.pk %}" class="btn btn-outline">Edit</a>
       <a href="{% url 'hiring:job_delete' job.pk %}" class="btn btn-outline btn-error">Delete</a>
     </div>
