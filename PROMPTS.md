@@ -28,6 +28,60 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Initial CLAUDE.md for the Applicant Tracking System
+
+### Prompts
+
+1. **Draft the initial CLAUDE.md.**
+   > Create the initial CLAUDE.md for this project using:
+   > - @prd/applicant-tracking-system.md
+   > - @plans/applicant-tracking-system.md
+   > - @prototypes/stage-rules-decisions.md
+   > - @prototypes/pipeline-ui-decisions.md
+   >
+   > Keep it to 20-30 lines. Include only:
+   > 1. A one-line project description.
+   > 2. The approved technology stack and package manager.
+   > 3. Durable, project-wide architecture decisions already established in the PRD.
+   > 4. Short pointers to the PRD, plan, and prototypes instead of repeating their details.
+   >
+   > Don't add commands yet because the tooling hasn't been installed or verified.
+   > Don't predict project structure, paths, template conventions, URL conventions, or testing commands that don't exist yet.
+   > Describe approved architecture as decisions, not as code that already exists.
+   > Don't copy business requirements, user stories, phases, rejected alternatives, or detailed stage rules into CLAUDE.md.
+   > Don't invent new conventions or pad the file just to reach the line count.
+   >
+   > Show me the draft and its line count for review. Don't start implementation.
+
+2. **Correction: draft revisions.**
+   > This is close. Please revise the draft before saving it:
+   >
+   > - Describe architecture as approved decisions rather than existing code.
+   > - Replace the services line with: "Use shared service operations for application creation, stage changes, and job closing/reopening. Save application stage changes and their history together in a transaction."
+   > - Shorten the history-facts line to: "Derive past workflow facts from stage history rather than duplicating them in application fields."
+   > - Replace the deletion line with: "Apply the PRD's record-protection rules consistently across app, ORM, and admin deletion paths."
+   > - Keep the rest concise and within 20-30 lines.
+   >
+   > Show me the revised draft and line count. Don't start implementation.
+
+3. **Approve, save and write this log.**
+   > I approve this version. Save it as CLAUDE.md at the repository root.
+   >
+   > Write this session log to PROMPTS.md according to its instructions, including the draft review and revisions. Don't start implementation yet.
+
+### Summary
+
+- **Outcome:**
+  - **CLAUDE.md:** saved at the repo root, 25 lines. It has a one-line project description, the stack (Python, Django, SQLite, uv, Tailwind + DaisyUI via django-tailwind-cli, HTMX, Ruff, pytest + pytest-django), nine approved architecture decisions, and pointers to the PRD, plan and both prototype decision files.
+  - **Left out on purpose:** commands, URLs, templates, test layout, user stories, phases, detailed stage rules, and plan-only details (`LoginRequiredMiddleware`, storing `Application.stage`, the `stages.py`/`services.py` file names). The stage-rules and services modules are described the way the PRD describes them.
+  - **Not started:** no production code and no tooling installed.
+- **Deviations:**
+  - **Framing:** the first draft's "Architecture decisions" section read partly like existing code. I had it reframed as approved decisions. The heading became "Approved architecture decisions" and every bullet is now an instruction.
+  - **My wording:** I replaced the agent's services, history-facts and deletion lines with my own shorter wording. The deletion line now points to the PRD's protection rules instead of naming model and QuerySet `delete()`.
+- **Sideways:**
+  - **Draft before saving:** the first prompt said both "create" and "show me the draft for review". The agent showed the draft in chat and didn't write the file until I approved the revised version.
+  - Nothing else went wrong.
+
 ## 2026-11-01 — Phased implementation plan for the Applicant Tracking System
 
 ### Prompts
