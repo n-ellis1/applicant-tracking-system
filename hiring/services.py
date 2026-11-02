@@ -5,10 +5,14 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from .models import Application, JobOpening, StageHistoryEntry
-from .stages import Stage
+from .stages import Stage, check_move
 
 DUPLICATE_APPLICATION = "This candidate has already applied to this job."
 CLOSED_JOB = "This job is closed and can't accept new applications."
+REASON_NOT_ALLOWED = "A reason can only be given when rejecting or withdrawing."
+
+# Only moves that end an application can carry a reason.
+REASON_STAGES = (Stage.REJECTED, Stage.WITHDRAWN)
 
 
 def _has_applied(candidate, job):
@@ -47,6 +51,37 @@ def create_application(*, candidate, job, applied_on, changed_by):
             raise ValidationError(DUPLICATE_APPLICATION, code="duplicate") from None
         raise
     return application
+
+
+def move_application(application, target, *, changed_by, reason=""):
+    """Move an application to target and record the move in its history.
+
+    Raises ValidationError if the move isn't allowed.
+    """
+    if reason and target not in REASON_STAGES:
+        raise ValidationError(REASON_NOT_ALLOWED, code="reason_not_allowed")
+    with transaction.atomic():
+        # Check against the database: the caller's page may be stale.
+        current = Application.objects.select_related("job").get(pk=application.pk)
+        check = check_move(
+            current.stage,
+            target,
+            job_open=current.job.status == JobOpening.Status.OPEN,
+        )
+        if not check.allowed:
+            raise ValidationError(check.reason, code="blocked_move")
+        old_stage = current.stage
+        current.stage = target
+        current.save(update_fields=["stage", "updated_at"])
+        StageHistoryEntry.objects.create(
+            application=current,
+            old_stage=old_stage,
+            new_stage=target,
+            changed_by=changed_by,
+            reason=reason,
+        )
+    application.stage = current.stage
+    return current
 
 
 def close_job(job):

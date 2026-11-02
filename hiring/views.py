@@ -15,10 +15,11 @@ from .forms import (
     CandidateForm,
     JobApplicationForm,
     JobOpeningForm,
+    MoveForm,
     SkillForm,
 )
 from .models import Application, Candidate, JobOpening, Skill
-from .stages import ACTIVE_STAGES, FINAL_STAGES, Stage
+from .stages import ACTIVE_STAGES, FINAL_STAGES, Stage, check_move, next_stage
 
 # Pipeline workspace
 
@@ -46,7 +47,33 @@ def _progress_steps(application, history):
     return [*steps, last]
 
 
-def _workspace(request, job, selected=None):
+def _stage_actions(application):
+    """The panel's moves, sorted by the stage rules into actions and reasons."""
+    job_open = application.job.status == JobOpening.Status.OPEN
+    step = next_stage(application.stage)
+    actions = {
+        "advance": None,
+        "end_moves": [],
+        "other_moves": [],
+        "blocked_moves": [],
+    }
+    for target in Stage:
+        if target == application.stage:
+            continue
+        check = check_move(application.stage, target, job_open=job_open)
+        if not check.allowed:
+            actions["blocked_moves"].append({"stage": target, "reason": check.reason})
+        elif target in services.REASON_STAGES:
+            # Only the inline confirmation boxes reach Rejected and Withdrawn.
+            actions["end_moves"].append(target)
+        elif target == step:
+            actions["advance"] = target
+        else:
+            actions["other_moves"].append(target)
+    return actions
+
+
+def _workspace(request, job, selected=None, move_form=None):
     # job is None only on the landing page when no job is open.
     # The sidebar filter defaults to the job's status so its link is visible;
     # the landing page defaults to Open.
@@ -92,6 +119,13 @@ def _workspace(request, job, selected=None):
         history = list(selected.history.select_related("changed_by"))
         context["history"] = history
         context["progress"] = _progress_steps(selected, history)
+        context["actions"] = _stage_actions(selected)
+        if move_form is not None:
+            context["move_errors"] = [
+                message
+                for messages in move_form.errors.values()
+                for message in messages
+            ]
     return render(request, "hiring/pipeline.html", context)
 
 
@@ -275,6 +309,33 @@ def application_detail(request, pk):
         Application.objects.select_related("candidate", "job"), pk=pk
     )
     return _workspace(request, application.job, application)
+
+
+@require_POST
+def application_move(request, pk):
+    application = get_object_or_404(
+        Application.objects.select_related("candidate", "job"), pk=pk
+    )
+    form = MoveForm(request.POST)
+    if form.is_valid():
+        try:
+            services.move_application(
+                application,
+                form.cleaned_data["stage"],
+                changed_by=request.user,
+                reason=form.cleaned_data["reason"],
+            )
+        except ValidationError as error:
+            form.add_error(None, error)
+        else:
+            # Back to the same workspace URL, keeping a valid sidebar filter.
+            url = reverse("hiring:application_detail", args=[pk])
+            jobs_filter = request.GET.get("jobs")
+            if jobs_filter in dict(JOB_STATUS_FILTERS):
+                url += "?" + urlencode({"jobs": jobs_filter})
+            return redirect(url)
+    # The move changed nothing; show why, with actions for the current stage.
+    return _workspace(request, application.job, application, move_form=form)
 
 
 # Jobs

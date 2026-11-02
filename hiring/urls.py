@@ -29,6 +29,11 @@ urlpatterns = [
         views.application_detail,
         name="application_detail",
     ),
+    path(
+        "pipeline/applications/<int:pk>/move/",
+        views.application_move,
+        name="application_move",
+    ),
     path("jobs/", views.job_list, name="job_list"),
     path("jobs/new/", views.job_create, name="job_create"),
     path("jobs/<int:pk>/", views.job_detail, name="job_detail"),

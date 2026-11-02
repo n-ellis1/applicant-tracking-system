@@ -1,4 +1,4 @@
-from hiring.models import Candidate, JobOpening
+from hiring.models import Application, Candidate, JobOpening
 
 
 def make_candidate(**fields):
@@ -19,3 +19,11 @@ def make_job(**fields):
         "description": "Builds APIs.",
     }
     return JobOpening.objects.create(**(defaults | fields))
+
+
+def assert_stage_matches_history():
+    """Every application's stage equals its latest history entry's new stage."""
+    for application in Application.objects.all():
+        latest = application.history.last()
+        assert latest is not None, f"{application} has no history"
+        assert application.stage == latest.new_stage, application

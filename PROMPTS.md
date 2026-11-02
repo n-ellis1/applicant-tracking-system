@@ -28,6 +28,167 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 8: Moving applications
+
+### Prompts
+
+1. **Start Phase 8 (`/implement`).**
+   > /implement @prd/applicant-tracking-system.md @plans/applicant-tracking-system.md implement Phase 8 only
+   >
+   > Read CLAUDE.md and follow the implement and tdd skills. Preserve the sidebar filter behavior added in Phase 7.
+   >
+   > Propose the TDD candidates, explain each in beginner-friendly language, and wait for my approval before writing code.
+   >
+   > Keep this phase scoped to stage movement, history entries, rejection/withdrawal confirmation with optional reasons, closed-job restrictions, and clear blocked-move explanations. Application reopening belongs to Phase 9; HTMX actions come later.
+   >
+   > After automated checks pass, give me browser verification steps and wait for my confirmation. Don't mark the phase complete, commit, push, or start Phase 9 yet.
+
+2. **Approve all three candidates, splitting candidate 3 and adding service tests.**
+   > I approve all three candidates. Use separate tests for successful and stale service moves so failures are clear.
+   >
+   > Include ordinary tests proving that:
+   > - The service checks the current application stage and job status from the database, rather than trusting stale objects.
+   > - If writing history fails, the stage update rolls back.
+   > - Reasons are accepted only for Rejected or Withdrawn.
+   >
+   > Keep reopening out of scope until Phase 9 and preserve jobs= on redirects.
+   >
+   > Start with candidate 1. Show me the test and RED result, then stop for approval before implementing the rules.
+
+3. **Approve the open-job test and reason texts.**
+   > I approve the test cases and both reason texts. Implement the open-job rules, keeping final-to-active moves blocked until Phase 9.
+   >
+   > Show me the GREEN results and regression results, then stop before candidate 2.
+
+4. **Approve the open-job rules and reopen message; add an unknown-stage test.**
+   > Yes, I approve the open-job behavior and the message "This application is finished. Reopen it before moving it."
+   >
+   > Include an ordinary test that unknown stage values are rejected, since "every other target" should mean only valid stages.
+   >
+   > Proceed to candidate 2 for closed-job blocking. Show me the test and RED result, then stop for approval before implementing it.
+
+5. **Approve the closed-job test, message and reason priority.**
+   > I approve the tests, closed-job message, and reason priority. Implement closed-job blocking so active applications can only move to Rejected or Withdrawn.
+   >
+   > Show me the GREEN results and full regression results, then stop before candidate 3.
+
+6. **Start the successful service-move test.**
+   > Yes, I agree. Proceed to candidate 3's successful service-move test, separate from the stale-move test. Show me the test and RED result, then stop for approval before implementing the service.
+
+7. **Approve the test and service interface, reading state from the database.**
+   > I approve this test and the service interface. Implement the move using check_move, saving the stage change and history entry in one transaction.
+   >
+   > Read the current application stage and job status from the database. Show me the GREEN result and regression results, then stop before the stale-move test. If that test already passes, report it honestly.
+
+8. **Write the stale-move test without forcing RED.**
+   > Yes, I agree. Write and run the separate stale-move test. Verify that it uses the current database stage, raises the expected error, and leaves both stage and history unchanged.
+   >
+   > Report the actual result without removing working behavior to force RED. Stop afterward before continuing with the remaining Phase 8 work.
+
+9. **Continue with the rest of Phase 8, with logging instructions.**
+   > Yes, continue with the remaining Phase 8 work and ordinary tests as listed.
+   >
+   > Record the open-job rules, closed-job rules, and successful service move as RED-to-GREEN work. Record the stale-move test separately as passing immediately.
+   >
+   > Preserve jobs= on redirects, keep Reject and Withdraw behind their inline confirmation, and leave reopening for Phase 9.
+   >
+   > Run all planned checks, then give me browser verification steps. Wait for my confirmation before marking Phase 8 complete, committing, pushing, or starting Phase 9.
+
+10. **Browser checks passed; mark complete, propose CLAUDE.md, correct the test count.**
+    > All Phase 8 browser checks passed, including stage movement and history, rejection/withdrawal confirmation and reasons, blocked-move explanations, closed-job restrictions, stale-page errors, sidebar filter preservation, and dark narrow-screen layout.
+    >
+    > I approve the message "A reason can only be given when rejecting or withdrawing."
+    >
+    > Mark Phase 8 complete and show me any proposed CLAUDE.md updates. Keep them concise and limited to durable conventions verified in this phase. If nothing needs adding, say so.
+    >
+    > One reporting correction: Phase 8 started with 199 tests, not 249. The final total is 349.
+    >
+    > Don't commit or start Phase 9 yet.
+
+11. **Correction: approve part of CLAUDE.md with my wording, and write this log.**
+    > Approve the two Project layout updates and these conventions:
+    > - Workspace POST forms preserve a valid jobs filter through their action URLs and redirects.
+    > - Allowed and blocked moves and their explanations come from check_move(); templates don't decide transition rules.
+    >
+    > Leave out the outcome-specific confirmation/reason line and the named test helper. Those details are already documented in the PRD and code.
+    >
+    > Apply the updates and report CLAUDE.md's line count.
+    >
+    > Write this session log to PROMPTS.md according to its instructions. Include the RED-to-GREEN work, the stale-move regression test that passed immediately, browser verification, and the corrected test totals: 199 before Phase 8 and 349 afterward.
+    >
+    > Then show me the changed-file summary and proposed commit message. Don't commit or start Phase 9 yet.
+
+### Summary
+
+- **Outcome:**
+  - **Stage rules (`hiring/stages.py`):** `check_move(current, target, *, job_open)` returns `MoveCheck(allowed, reason)`. It checks in this order:
+    - same stage: "The application is already at {Stage}."
+    - final to final: "A finished application can't move straight to another outcome. Reopen it first."
+    - final to active: "This application is finished. Reopen it before moving it." This is a placeholder until Phase 9's reopen rules.
+    - closed job, target not Rejected or Withdrawn: "This job is closed, so its applications can only be rejected or marked withdrawn."
+    - otherwise allowed
+
+    Unknown stage values raise `ValueError` through `Stage(...)`. A pure `next_stage()` helper gives the Advance target.
+  - **Service (`hiring/services.py`):** `move_application(application, target, *, changed_by, reason="")`:
+    - refuses a reason on any move other than Rejected or Withdrawn with "A reason can only be given when rejecting or withdrawing."
+    - inside one `transaction.atomic()` block, re-reads the application and its job from the database, asks `check_move`, raises `ValidationError(code="blocked_move")` if the move is blocked, then saves the stage and writes exactly one history entry
+  - **View and URL:** POST-only `/pipeline/applications/<pk>/move/` with a `MoveForm` (stage choice and a trimmed optional reason). On success it redirects to the application URL, keeping a valid `jobs=` value and dropping an unknown one. On refusal it re-renders the workspace (status 200) with "That move wasn't made.", the reason, and actions for the current stage.
+  - **Panel (`_application_panel.html`):**
+    - Advance to the next stage.
+    - **Reject…** and **Mark withdrawn…** as `<details>` boxes with an optional reason and a Confirm button. Nothing else posts Rejected or Withdrawn.
+    - Other allowed moves, in pipeline order.
+    - A collapsed **Blocked moves (N)** list with the `check_move` reasons.
+    - A closed-job alert, and "No stage moves are available." when nothing is allowed.
+    - Reasons in the history timeline.
+    - Every move form posts to `move/?jobs=<current filter>`.
+  - **TDD, three candidates:**
+    1. **Open-job rules R-2 to R-5** (`test_stages.py`): pairs generated per rule (15 forward including Hired, 10 backward, 10 to Rejected or Withdrawn, 6 final to final) plus 8 same-stage cases and a guard test on the generated lists. After scaffolding a `MoveCheck` stub that always refused, it was **RED** with 49 assertion failures (`MoveCheck(allowed=False, reason='') == MoveCheck(allowed=True, reason='')`), then **GREEN**.
+    2. **Closed-job rules R-11 and R-12** (`test_stages.py`): 10 allowed endings, 25 blocked forward and backward moves, Offer to Hired spelled out, and 2 reason-priority cases. **RED** with 26 assertion failures, because `job_open` was ignored, then **GREEN** with one closed-job check placed after the same-stage and final-stage checks. The 2 priority cases passed before the implementation, which the agent reported.
+    3. **Successful service move** (`test_moves.py`): a `recorder` creates the application, a separate `mover` moves it Applied to Interview, and the test checks the saved stage and exactly one new history entry with the old and new stage, the mover, the time and no reason. **RED** with `assert 'applied' == Stage.INTERVIEW` against a do-nothing stub, then **GREEN**.
+  - **Stale-move test, passed immediately (not RED-to-GREEN):** a stale copy still at Applied tries Screening after another move rejected the application. It's refused with the finished-application reason, and the saved stage and history stay unchanged. The database re-check written for candidate 3 already covered it, and the agent predicted that before writing the test. It stays as a regression guard.
+  - **Ordinary tests (all passed on first run):**
+    - in `test_stages.py`: 15 final-to-active cases and 3 unknown-stage cases
+    - in `test_moves.py`, 22 test functions (42 cases):
+      - service moves on an open job
+      - endings from every active stage with the reason saved, and an ending without a reason
+      - reasons refused on other moves
+      - final to final blocked
+      - closed-job endings allowed and other moves blocked
+      - the job status read from the database, both when it was closed and when it was reopened behind a stale object
+      - rollback of the stage when the history write fails
+      - `stage` matching the latest history entry after every step of a sequence that includes a refused move
+      - the view: redirects keeping or dropping `jobs=`, the reason trimmed and shown in the timeline, a blank reason treated as none, the stale error with refreshed actions, an unknown stage refused, GET returning 405
+      - the panel: on an open job, on a closed job, for a finished application, and its move forms keeping `jobs=`
+    - a shared `assert_stage_matches_history()` helper was added to `hiring/tests/helpers.py`
+  - **Test totals:** 199 tests before Phase 8, 349 after: 150 new (106 in `test_stages.py`, 44 in `test_moves.py`).
+  - **Automated checks:** 349 passed. `ruff check`, `ruff format --check` and `makemigrations --check` were clean, and `tailwind build` compiled the new classes. No migration was needed.
+  - **Browser checks (by me):** all passed. They covered:
+    - stage movement and history
+    - rejection and withdrawal confirmation and reasons
+    - blocked-move explanations
+    - closed-job restrictions
+    - stale-page errors
+    - keeping the sidebar filter
+    - the dark narrow-screen layout
+  - **Docs:**
+    - All nine Phase 8 acceptance criteria are ticked in the plan.
+    - CLAUDE.md's Project layout lines for `stages.py` and `services.py` now mention `check_move()` and `move_application`.
+    - Conventions gained the two lines I worded: workspace POST forms preserving a valid `jobs` filter, and moves and their explanations coming from `check_move()`.
+    - It's now 68 lines.
+- **Deviations:**
+  - **Candidate 3 split:** I required separate tests for the successful and stale service moves.
+  - **Extra ordinary tests:** I added tests for reading the stage and job status from the database, rolling back on a failed history write, reasons only for Rejected or Withdrawn, and unknown stage values.
+  - **Stale test:** I told the agent to report its real result rather than remove working behavior to force RED.
+  - **CLAUDE.md:** I approved the layout lines but rewrote the two conventions in my own words. I dropped the proposed line about Rejected and Withdrawn confirmations and reasons, and the line naming the test helper, because the PRD and code already cover them.
+  - **Message approvals:** I approved each new message as it appeared: the R-5 and same-stage reasons, the finished-application reason, the closed-job reason and its priority, and the reason-not-allowed message.
+- **Sideways:**
+  - **Wrong baseline count:** the agent reported "249 passed" as the regression baseline after candidate 1 and described 249 as the pre-phase total. That run already included the 50 new stage tests, so the real starting total was 199. I caught it, and the totals above use the corrected figures.
+  - **Early passes:** the 2 reason-priority cases in candidate 2 and the unknown-stage test passed before their behavior was written, because of the existing check order and the `Stage(...)` conversion. The stale-move test passed immediately, as described above. All were reported as they happened.
+  - **Ordinary tests not run RED:** the ordinary service, view and panel tests were written after the code, so they weren't seen failing first.
+  - **Outdated comment left alone:** `add_application` in `test_pipeline.py` still creates applications directly with the comment "Moving applications arrives in Phase 8". It wasn't changed in this phase.
+  - **Formatter and line endings:** `ruff format` reflowed `test_moves.py`, `test_stages.py` and `views.py` without changing what they do, and the full suite was re-run afterwards. Git's LF-to-CRLF warnings are informational.
+  - **Skill lookup:** `/implement` isn't a registered skill in this session, so the agent read `.claude/skills/implement/SKILL.md` directly.
+
 ## 2026-11-01 — Phase 7: The pipeline workspace (plus the sidebar filter)
 
 ### Prompts

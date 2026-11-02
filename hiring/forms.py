@@ -2,6 +2,7 @@ from django import forms
 from django.utils import timezone
 
 from .models import Candidate, JobOpening, Skill, validate_not_future
+from .stages import Stage
 
 
 class SkillForm(forms.ModelForm):
@@ -129,6 +130,14 @@ class CandidateApplicationForm(ApplicationForm):
         self.fields["job"].queryset = JobOpening.objects.filter(
             status=JobOpening.Status.OPEN
         ).exclude(applications__candidate=candidate)
+
+
+class MoveForm(forms.Form):
+    """A submitted stage move. The service decides whether it's allowed."""
+
+    stage = forms.ChoiceField(choices=Stage.choices)
+    # Trimmed, so a reason of only spaces counts as none.
+    reason = forms.CharField(required=False)
 
 
 class JobApplicationForm(ApplicationForm):

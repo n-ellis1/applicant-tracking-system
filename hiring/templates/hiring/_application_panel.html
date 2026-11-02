@@ -47,6 +47,82 @@
   </div>
 </dl>
 
+{% if selected.job.status != 'open' %}
+  <div role="alert" class="alert alert-warning">
+    <span>This job is closed. Its applications keep their stages and can only be rejected or marked withdrawn.</span>
+  </div>
+{% endif %}
+
+{% if move_errors %}
+  <div role="alert" class="alert alert-error">
+    <div class="min-w-0 break-words">
+      <p class="font-semibold">That move wasn't made.</p>
+      {% for error in move_errors %}<p>{{ error }}</p>{% endfor %}
+      <p class="text-sm">The actions below are for the application's current stage.</p>
+    </div>
+  </div>
+{% endif %}
+
+{# Every move posts the target stage; the service re-checks it. #}
+{% url 'hiring:application_move' selected.pk as move_url %}
+<section class="flex flex-col gap-3" aria-labelledby="actions-heading">
+  <h3 id="actions-heading" class="font-semibold">Stage actions</h3>
+  {% if actions.advance or actions.end_moves %}
+    <div class="flex flex-wrap items-start gap-2">
+      {% if actions.advance %}
+        <form method="post" action="{{ move_url }}?jobs={{ jobs_filter }}">
+          {% csrf_token %}
+          <input type="hidden" name="stage" value="{{ actions.advance }}">
+          <button type="submit" class="btn btn-sm btn-primary">Advance to {{ actions.advance.label }}</button>
+        </form>
+      {% endif %}
+      {# Rejected and Withdrawn are reachable only through these confirmation boxes. #}
+      {% for end_stage in actions.end_moves %}
+        <details class="open:w-full" data-confirm="{{ end_stage }}">
+          <summary class="btn btn-sm btn-outline btn-error">{% if end_stage == 'rejected' %}Reject…{% else %}Mark withdrawn…{% endif %}</summary>
+          <form method="post" action="{{ move_url }}?jobs={{ jobs_filter }}" class="mt-2 flex flex-col gap-2 rounded-box border border-error/50 bg-base-100 p-3">
+            {% csrf_token %}
+            <input type="hidden" name="stage" value="{{ end_stage }}">
+            <label for="reason-{{ end_stage }}" class="text-sm">Reason (optional)</label>
+            <textarea id="reason-{{ end_stage }}" name="reason" rows="2" class="textarea w-full"></textarea>
+            <button type="submit" class="btn btn-sm btn-error self-start">{% if end_stage == 'rejected' %}Confirm rejection{% else %}Confirm withdrawal{% endif %}</button>
+          </form>
+        </details>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if actions.other_moves %}
+    <div>
+      <p class="mb-1 text-sm text-base-content/70">Other moves</p>
+      <div class="flex flex-wrap gap-2">
+        {% for target in actions.other_moves %}
+          <form method="post" action="{{ move_url }}?jobs={{ jobs_filter }}">
+            {% csrf_token %}
+            <input type="hidden" name="stage" value="{{ target }}">
+            <button type="submit" class="btn btn-sm btn-outline">Move to {{ target.label }}</button>
+          </form>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  {% if not actions.advance and not actions.end_moves and not actions.other_moves %}
+    <p class="text-base-content/80">No stage moves are available.</p>
+  {% endif %}
+
+  {% if actions.blocked_moves %}
+    <details class="collapse collapse-arrow border border-base-300 bg-base-100">
+      <summary class="collapse-title text-sm font-medium">Blocked moves ({{ actions.blocked_moves|length }})</summary>
+      <ul class="collapse-content flex flex-col gap-1 text-sm" aria-label="Blocked moves">
+        {% for move in actions.blocked_moves %}
+          <li class="break-words"><span class="font-medium">{{ move.stage.label }}:</span> {{ move.reason }}</li>
+        {% endfor %}
+      </ul>
+    </details>
+  {% endif %}
+</section>
+
 <section>
   <h3 class="mb-2 font-semibold">Stage history</h3>
   <ol class="flex flex-col gap-2">
@@ -54,6 +130,9 @@
       <li class="rounded-box border border-base-300 bg-base-100 p-3">
         <p>{% if entry.old_stage %}{{ entry.get_old_stage_display }} → {% endif %}{{ entry.get_new_stage_display }}</p>
         <p class="text-sm text-base-content/70">{{ entry.changed_at|date:"M j, Y, g:i A T" }} · {{ entry.changed_by.get_username }}</p>
+        {% if entry.reason %}
+          <p class="mt-1 whitespace-pre-line break-words text-sm">Reason: {{ entry.reason }}</p>
+        {% endif %}
       </li>
     {% endfor %}
   </ol>

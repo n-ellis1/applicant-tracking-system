@@ -408,15 +408,15 @@ Moves submit as normal POSTs that redirect back to the same workspace URL in thi
 
 ### Acceptance criteria
 
-- [ ] Parametrized `stages.py` tests cover R-2, R-3, R-4, R-5, R-11 and R-12 for every relevant (current, target) pair, including the reason text for blocked cases.
-- [ ] On an open job, forward one step, forward skip (including to Hired) and backward to any earlier active stage succeed.
-- [ ] Rejected or Withdrawn succeeds from every active stage, with the optional reason saved on that history entry and shown in the timeline.
-- [ ] A move between final outcomes is blocked.
-- [ ] On a closed job, only active → Rejected or Withdrawn succeeds, and → Hired is blocked.
-- [ ] Every successful move writes exactly one history entry with the employee and time. A blocked move changes neither the stage nor the history.
-- [ ] Submitting a move that's no longer allowed (stale page) shows an error and refreshed actions.
-- [ ] The panel shows advance, Reject…, Mark withdrawn…, other allowed moves, collapsed blocked moves with reasons, and a closed-job alert where relevant.
-- [ ] `Application.stage` always equals the latest history entry's `new_stage`.
+- [x] Parametrized `stages.py` tests cover R-2, R-3, R-4, R-5, R-11 and R-12 for every relevant (current, target) pair, including the reason text for blocked cases.
+- [x] On an open job, forward one step, forward skip (including to Hired) and backward to any earlier active stage succeed.
+- [x] Rejected or Withdrawn succeeds from every active stage, with the optional reason saved on that history entry and shown in the timeline.
+- [x] A move between final outcomes is blocked.
+- [x] On a closed job, only active → Rejected or Withdrawn succeeds, and → Hired is blocked.
+- [x] Every successful move writes exactly one history entry with the employee and time. A blocked move changes neither the stage nor the history.
+- [x] Submitting a move that's no longer allowed (stale page) shows an error and refreshed actions.
+- [x] The panel shows advance, Reject…, Mark withdrawn…, other allowed moves, collapsed blocked moves with reasons, and a closed-job alert where relevant.
+- [x] `Application.stage` always equals the latest history entry's `new_stage`.
 
 ### Possible TDD candidates (not approved)
 
