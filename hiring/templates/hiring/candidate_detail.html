@@ -55,9 +55,25 @@
       </section>
 
       <section>
-        <h2 class="mb-2 font-semibold">Applications</h2>
-        {# Recording applications arrives in a later phase. #}
-        <p class="text-base-content/80">No applications yet.</p>
+        <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 class="font-semibold">Applications</h2>
+          <a href="{% url 'hiring:candidate_application_create' candidate.pk %}" class="btn btn-sm btn-primary">Add application</a>
+        </div>
+        {% if applications %}
+          <ul class="flex flex-col gap-2">
+            {% for application in applications %}
+              <li class="flex flex-wrap items-center justify-between gap-2 rounded-box border border-base-300 bg-base-100 p-3">
+                <a href="{% url 'hiring:application_detail' application.pk %}" class="link min-w-0 break-words">{{ application.job.title }}</a>
+                <span class="flex flex-wrap items-center gap-2 text-sm">
+                  <span class="badge badge-outline">{{ application.get_stage_display }}</span>
+                  <span class="text-base-content/70">Applied {{ application.applied_on|date:"M j, Y" }}</span>
+                </span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="text-base-content/80">No applications yet.</p>
+        {% endif %}
       </section>
 
       <dl class="grid gap-4 text-sm sm:grid-cols-2">

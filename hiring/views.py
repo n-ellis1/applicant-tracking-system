@@ -1,15 +1,16 @@
 from urllib.parse import urlencode
 
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db.models import ProtectedError, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from . import services
-from .forms import CandidateForm, JobOpeningForm, SkillForm
-from .models import Candidate, JobOpening, Skill
+from .forms import CandidateApplicationForm, CandidateForm, JobOpeningForm, SkillForm
+from .models import Application, Candidate, JobOpening, Skill
 
 # Placeholder pages for the top navigation. Later phases replace each one.
 
@@ -71,7 +72,13 @@ def candidate_detail(request, pk):
     return render(
         request,
         "hiring/candidate_detail.html",
-        {"candidate": candidate, "active_nav": "candidates"},
+        {
+            "candidate": candidate,
+            "applications": candidate.applications.select_related("job").order_by(
+                "-created_at", "-pk"
+            ),
+            "active_nav": "candidates",
+        },
     )
 
 
@@ -93,15 +100,71 @@ def candidate_edit(request, pk):
     )
 
 
+def candidate_application_create(request, pk):
+    candidate = get_object_or_404(Candidate, pk=pk)
+    form = CandidateApplicationForm(request.POST or None, candidate=candidate)
+    if request.method == "POST" and form.is_valid():
+        try:
+            application = services.create_application(
+                candidate=candidate,
+                job=form.cleaned_data["job"],
+                applied_on=form.cleaned_data["applied_on"],
+                changed_by=request.user,
+            )
+        except ValidationError as error:
+            form.add_error("job", error)
+        else:
+            return redirect("hiring:application_detail", pk=application.pk)
+    return render(
+        request,
+        "hiring/application_form.html",
+        {
+            "form": form,
+            "candidate": candidate,
+            "title": f"New application for {candidate}",
+            "active_nav": "candidates",
+        },
+    )
+
+
 def candidate_delete(request, pk):
     candidate = get_object_or_404(Candidate, pk=pk)
     if request.method == "POST":
-        candidate.delete()
-        return redirect("hiring:candidate_list")
+        try:
+            candidate.delete()
+        except ProtectedError:
+            pass  # The page below explains which applications block it.
+        else:
+            return redirect("hiring:candidate_list")
     return render(
         request,
         "hiring/candidate_confirm_delete.html",
-        {"candidate": candidate, "active_nav": "candidates"},
+        {
+            "candidate": candidate,
+            "applications": candidate.applications.select_related("job"),
+            "active_nav": "candidates",
+        },
+    )
+
+
+# Applications
+
+
+@require_GET
+def application_detail(request, pk):
+    # A basic page until the pipeline workspace replaces it. Candidate and job
+    # are shown but never editable.
+    application = get_object_or_404(
+        Application.objects.select_related("candidate", "job"), pk=pk
+    )
+    return render(
+        request,
+        "hiring/application_detail.html",
+        {
+            "application": application,
+            "history": application.history.select_related("changed_by"),
+            "active_nav": "pipeline",
+        },
     )
 
 
@@ -178,12 +241,20 @@ def job_edit(request, pk):
 def job_delete(request, pk):
     job = get_object_or_404(JobOpening, pk=pk)
     if request.method == "POST":
-        job.delete()
-        return redirect("hiring:job_list")
+        try:
+            job.delete()
+        except ProtectedError:
+            pass  # The page below explains which applications block it.
+        else:
+            return redirect("hiring:job_list")
     return render(
         request,
         "hiring/job_confirm_delete.html",
-        {"job": job, "active_nav": "jobs"},
+        {
+            "job": job,
+            "applications": job.applications.select_related("candidate"),
+            "active_nav": "jobs",
+        },
     )
 
 

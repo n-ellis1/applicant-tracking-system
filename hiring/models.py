@@ -1,6 +1,11 @@
+from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import ProtectedError
 from django.db.models.functions import Lower
+from django.utils import timezone
+
+from .stages import Stage
 
 
 def refuse_if_used(jobs):
@@ -103,3 +108,59 @@ class Candidate(models.Model):
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
+
+
+def validate_not_future(value):
+    if value > timezone.localdate():
+        raise ValidationError("The applied-on date can't be in the future.")
+
+
+class Application(models.Model):
+    # Candidate and job are fixed once created.
+    candidate = models.ForeignKey(
+        Candidate, on_delete=models.PROTECT, related_name="applications"
+    )
+    job = models.ForeignKey(
+        JobOpening, on_delete=models.PROTECT, related_name="applications"
+    )
+    applied_on = models.DateField(
+        default=timezone.localdate, validators=[validate_not_future]
+    )
+    notes = models.TextField(blank=True)
+    # Only services.py writes the stage, together with its history entry.
+    stage = models.CharField(max_length=20, choices=Stage)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["candidate", "job"],
+                name="unique_application_candidate_job",
+                violation_error_message=(
+                    "This candidate has already applied to this job."
+                ),
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.candidate} for {self.job}"
+
+
+class StageHistoryEntry(models.Model):
+    application = models.ForeignKey(
+        Application, on_delete=models.PROTECT, related_name="history"
+    )
+    # Blank on the initial entry.
+    old_stage = models.CharField(max_length=20, choices=Stage, blank=True)
+    new_stage = models.CharField(max_length=20, choices=Stage)
+    changed_at = models.DateTimeField(default=timezone.now)
+    changed_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name="+")
+    reason = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["changed_at", "pk"]
+        verbose_name_plural = "stage history entries"
+
+    def __str__(self):
+        return f"{self.application}: {self.old_stage or '-'} -> {self.new_stage}"

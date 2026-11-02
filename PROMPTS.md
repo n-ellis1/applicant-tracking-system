@@ -28,6 +28,133 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 6: Recording an application from the candidate page
+
+### Prompts
+
+1. **Start Phase 6 (`/implement`).**
+   > /implement @prd/applicant-tracking-system.md @plans/applicant-tracking-system.md implement Phase 6 only
+   >
+   > Read CLAUDE.md and follow the implement and tdd skills. Propose the TDD candidates, explain each in beginner-friendly language, and wait for my approval before writing code.
+   >
+   > After automated checks pass, give me browser verification steps and wait for my confirmation. Don't mark the phase complete, commit, push, or start Phase 7 yet.
+
+2. **Approve all three candidates and add rollback and constraint tests.**
+   > I approve all three candidates.
+   >
+   > Also include ordinary tests proving:
+   > - If writing the initial history entry fails, the application creation rolls back too.
+   > - The database rejects a duplicate candidate/job pair when the form is bypassed.
+   >
+   > Start with candidate 1. Show me the test and RED result, then stop for approval before implementing the behavior. Keep scaffolding limited, and report honestly if any behavior already passes.
+
+3. **Approve test 1, with a migration condition.**
+   > I approve this test. Implement application creation and its initial history entry in one transaction. Show me the GREEN result and regression results, then stop before candidate 2.
+   >
+   > Only regenerate migration 0005 if it hasn't been applied to the local database or shared. If it has, add a new migration for the constraint instead.
+
+4. **Confirm cycle 1 and start test 2.**
+   > Yes, I agree. Proceed to candidate 2: a duplicate application should show a friendly form error even when the existing application is Rejected.
+   >
+   > Show me the test and RED result, then stop for approval before implementing duplicate protection. Keep the separate database-constraint and rollback tests on the checklist.
+
+5. **Approve test 2, with picker and error-handling requirements.**
+   > I approve this test and the friendly error wording. Implement the service check, database unique constraint, and form error handling.
+   >
+   > Keep the displayed picker limited to eligible jobs, with server-side validation for every submission. Catch only the duplicate-constraint failure as a duplicate error; don't turn unrelated database errors into that message.
+   >
+   > Show me the GREEN result and full regression results, then stop before candidate 3.
+
+6. **Add the race and unrelated-error tests, then start test 3.**
+   > Yes, this implements the duplicate behavior. Add both proposed ordinary tests: the missed pre-check still produces the friendly duplicate error, and an unrelated IntegrityError propagates unchanged. Keep the rollback and direct database-constraint tests too.
+   >
+   > Describe the patched test as exercising the race-recovery path, not proving real concurrent requests work.
+   >
+   > Proceed to candidate 3. Show me the closed-job test and RED result, then stop for approval before implementing that check.
+
+7. **Approve test 3 and keep a forged-POST page test.**
+   > I approve this test and its wording. Add the closed-job check in create_application so it refuses before writing anything.
+   >
+   > Show me the GREEN result and full regression results, then stop before building the remaining Phase 6 work. Keep an ordinary forged-POST test to verify the refusal also appears correctly on the page.
+
+8. **Continue with the rest of Phase 6, reading job status fresh.**
+   > Yes, continue with the remaining Phase 6 work and ordinary tests as listed.
+   >
+   > Have create_application refresh the job's status from the database before checking it, so it doesn't rely on a potentially stale object supplied by another caller. Add a regression test for that case. This doesn't need to claim full concurrency protection.
+   >
+   > Run all planned checks, then give me browser verification steps. Wait for my confirmation before marking Phase 6 complete, committing, pushing, or starting Phase 7.
+
+9. **Browser checks passed; mark complete and propose CLAUDE.md.**
+   > All Phase 6 browser checks passed, including recording applications, picker exclusions, applying to a second job, future-date rejection, candidate and job deletion protection, deleting an unused candidate, and the narrow-window layout.
+   >
+   > Mark Phase 6 complete. Show me any proposed CLAUDE.md updates, limited to concise, durable conventions established and verified in this phase. If nothing needs adding, say so.
+   >
+   > Migration 0005 is now applied locally, so future model changes must use new migrations.
+   >
+   > Don't commit or start Phase 7 yet.
+
+10. **Correction: approve CLAUDE.md with my wording, and write this log.**
+    > Approve the updates with these adjustments:
+    >
+    > - Services layout line: "hiring/services.py: application creation and job close/reopen operations. Views use these shared operations."
+    > - Service errors: "Service operations report expected business-rule refusals with ValidationError. Views display the message in the relevant form or panel."
+    > - Current-state checks: "Validate service operations against current database state. Translate only identified constraint failures into friendly errors; let unrelated database errors propagate."
+    > - Picker guidance: "Where a service checks eligibility, EligibleChoiceField displays eligible records while allowing existing submitted records to reach that validation. Never rely on picker filtering alone."
+    > - Keep the stages.py and migration guidance.
+    >
+    > Apply these concise updates, then report CLAUDE.md's line count. Keep it within our final target of about 70-80 lines by trimming duplication if needed.
+    >
+    > Write this session log to PROMPTS.md according to its instructions, including the three RED-to-GREEN tests, rollback and constraint checks, stale-job check, and browser verification.
+    >
+    > Show me the changed-file summary and proposed commit message before committing. Don't start Phase 7.
+
+### Summary
+
+- **Outcome:**
+  - **Models:** `Application` (candidate and job FKs with `PROTECT`, `applied_on` defaulting to `timezone.localdate` with a shared `validate_not_future` validator, notes, `stage`, timestamps) and `StageHistoryEntry` (application FK with `PROTECT`, blank-able `old_stage`, `new_stage`, `changed_at`, `changed_by` FK to `User` with `PROTECT`, optional reason). A `UniqueConstraint(fields=["candidate", "job"], name="unique_application_candidate_job")`. Migration `0005_application_stagehistoryentry`.
+  - **Stages:** new `hiring/stages.py` with the eight stages and the active and final groups, in pipeline order.
+  - **Service:** `create_application(*, candidate, job, applied_on, changed_by)` in `hiring/services.py`:
+    - reads the job's status from the database and refuses a closed job with "This job is closed and can't accept new applications."
+    - refuses any existing application for the pair, whatever its stage, with "This candidate has already applied to this job."
+    - writes the application at Applied and its initial history entry inside one `transaction.atomic()` block
+    - turns an `IntegrityError` into the duplicate error only if the pair now exists, and re-raises any other database error unchanged
+    - raises `ValidationError` for refusals, before writing anything
+  - **Form:** `CandidateApplicationForm(candidate=...)` with a job picker and an applied-on date. The picker uses a new `EligibleChoiceField`: it lists only open jobs the candidate hasn't applied to, but accepts any existing job so a stale or forged choice reaches the service and gets its friendly reason.
+  - **Pages:**
+    - `/candidates/<pk>/applications/new/` records an application. The view attaches service refusals to the job field. If no eligible jobs are left, the page says so.
+    - `/pipeline/applications/<pk>/` is a basic GET-only page with the candidate, job, applied-on date, stage and stage history (Central time and username). Phase 7 replaces it with the workspace.
+    - Candidate detail gained "Add application" and a list of the candidate's applications linking to their pages.
+    - The candidate and job delete pages now say why a record with applications can't be deleted, list those applications, and offer no Delete button. A POST shows the same explanation.
+  - **TDD test 1** (a new application starts at Applied with one initial history entry): RED with `assert 0 == 1` after scaffolding the stage list, the models and migration, and an empty `create_application` that returned `None`. `Application.stage` was given no default, so the scaffolding didn't contain the behavior. Creating both records in one atomic block made it GREEN. The agent noted this test alone didn't prove the transaction.
+  - **TDD test 2** (a duplicate shows a friendly form error even when the existing application is Rejected): the test sets Rejected directly until Phase 8 and sends a forged POST. RED with `assert 2 == 1` after scaffolding the form, add view, URL and basic application page, because the duplicate was saved. The service pre-check, the unique constraint and view error handling made it GREEN. The agent noted this test exercised only the pre-check.
+  - **TDD test 3** (a closed job is refused by the service and writes nothing): RED with `Failed: DID NOT RAISE ValidationError`. That's pytest's `raises` expectation failing, not missing scaffolding. A closed-job check before any write made it GREEN.
+  - **All three were genuine RED-to-GREEN cycles.**
+  - **Rollback and constraint tests (ordinary, passed on first run):**
+    - the database rejects a duplicate candidate/job pair created directly through the ORM
+    - a forced `DatabaseError` on the history write leaves no application behind
+    - **race-recovery path:** with the pre-check patched to miss an existing application, the unique constraint fires and the service still returns the friendly duplicate error, re-checking once and writing nothing. This exercises the recovery code; it doesn't prove real concurrent requests work.
+    - an unrelated `IntegrityError` from the history write is re-raised as the same exception object, and nothing is saved
+  - **Stale-job regression test:** the job is closed in the database behind a job object that still says Open, and the service refuses it. It's a regression test for a stale object, not a concurrency guarantee.
+  - **Other ordinary tests:** 14 more test functions (16 cases), covering the forged closed-job POST showing the error under the job field, picker exclusions, the applied-on default, future dates rejected by the form and by model validation, saving and landing on the application page, applying to two jobs, candidate detail links, a submitted `candidate` value being ignored, the application page having no edit fields and refusing POST with 405, and candidate and job deletion protection through `delete()`, QuerySet delete and both delete pages on GET and POST.
+  - **Automated checks:** 169 tests passed. `ruff check`, `ruff format --check` and `makemigrations --check` were clean.
+  - **Browser checks (by me):** all passed. They covered recording applications, picker exclusions, applying to a second job, future-date rejection, candidate and job deletion protection, deleting an unused candidate, and the narrow-window layout.
+  - **Docs:** Phase 6's acceptance criteria are ticked in the plan. CLAUDE.md's Project layout gained the `stages.py` line and my `services.py` wording. Conventions gained service refusals through `ValidationError`, checking current database state with only identified constraint failures translated, `EligibleChoiceField`, and the migration rule.
+- **Deviations:**
+  - **Extra ordinary tests:** I added the rollback and direct database-constraint tests up front, then accepted the agent's proposed race-recovery and unrelated-`IntegrityError` tests, and required the patched test to be described as exercising the recovery path rather than real concurrency.
+  - **Duplicate handling:** I required only the duplicate-constraint failure to become the duplicate message, with unrelated database errors propagating.
+  - **Picker:** I required the displayed picker to stay limited to eligible jobs, with server-side validation on every submission.
+  - **Stale job:** the agent pointed out that the closed-job check trusted the job object passed in. I required the service to read the status from the database, with a regression test that doesn't claim full concurrency protection.
+  - **Migration 0005:** I allowed regenerating it only while it was unapplied and unshared. The agent checked `showmigrations` and `git status` before each regeneration. Now that it's applied locally, later model changes need new migrations.
+  - **CLAUDE.md wording:** I replaced the agent's services line and three convention lines with my own wording.
+- **Sideways:**
+  - **Stub choice:** a `NotImplementedError` stub would have made test 1 error instead of failing on an assertion, so the agent used a stub that returned `None` and said so.
+  - **Ordinary tests not run RED:** the rollback, constraint, race-recovery and unrelated-error tests covered code that already existed, so they passed on their first run. The agent reasoned that they would fail without the code they guard, but didn't break the code to show it.
+  - **Failing test assertions:** in the final batch, a "no `<form>` on the page" check failed because the nav's Log out form is on every page. The delete-page checks also looked for `Can&#x27;t`, but static template text isn't HTML-escaped. That was the same mistake as in Phase 3. Both were mechanical repairs: the tests now look for the specific form fields and Delete button, and for a plain `Can't`.
+  - **Ambiguous edit:** adding the fresh status read first failed because the target line matched twice. It was redone with more context.
+  - **Formatter and linter:** `ruff format` reformatted two files, and `ruff check` flagged a blank line after the imports in `services.py`. `ruff check --fix` fixed it.
+  - **Line endings:** git warned that LF will be replaced by CRLF in several files. It's informational, and nothing was changed for it.
+  - **Skill lookup:** `/implement` isn't one of the session's registered skills, so the agent read `.claude/skills/implement/SKILL.md` directly.
+
 ## 2026-11-01 — Phase 5: Candidates
 
 ### Prompts

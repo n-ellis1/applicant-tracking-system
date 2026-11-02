@@ -296,16 +296,16 @@ Candidates and jobs with applications can't be deleted. Their delete pages expla
 
 ### Acceptance criteria
 
-- [ ] A new application starts at Applied with exactly one history entry (blank old stage, Applied, current user, timestamp).
-- [ ] The candidate-page picker lists only open jobs the candidate hasn't applied to.
-- [ ] A duplicate submission (forged POST or race) is refused with a form error, including when the existing application is Rejected or Withdrawn. The test sets that stage directly until Phase 8.
-- [ ] Recording an application on a closed job is refused by the service and writes nothing.
-- [ ] The same candidate can apply to two different open jobs as separate applications.
-- [ ] Applied-on defaults to the local date, and a future date is rejected.
-- [ ] After saving, staff land on the application page showing the candidate, job, applied-on date, stage and history.
-- [ ] Candidate detail lists the candidate's applications, each linking to its application page.
-- [ ] A candidate or job with applications can't be deleted through the app view, `delete()` or QuerySet delete. The view explains why.
-- [ ] An application's candidate and job aren't editable anywhere in the app.
+- [x] A new application starts at Applied with exactly one history entry (blank old stage, Applied, current user, timestamp).
+- [x] The candidate-page picker lists only open jobs the candidate hasn't applied to.
+- [x] A duplicate submission (forged POST or race) is refused with a form error, including when the existing application is Rejected or Withdrawn. The test sets that stage directly until Phase 8.
+- [x] Recording an application on a closed job is refused by the service and writes nothing.
+- [x] The same candidate can apply to two different open jobs as separate applications.
+- [x] Applied-on defaults to the local date, and a future date is rejected.
+- [x] After saving, staff land on the application page showing the candidate, job, applied-on date, stage and history.
+- [x] Candidate detail lists the candidate's applications, each linking to its application page.
+- [x] A candidate or job with applications can't be deleted through the app view, `delete()` or QuerySet delete. The view explains why.
+- [x] An application's candidate and job aren't editable anywhere in the app.
 
 ### Possible TDD candidates (not approved)
 

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}{{ application }}{% endblock %}
+
+{% block content %}
+  <div class="mb-4 flex flex-wrap items-center gap-3">
+    <h1 class="break-words text-2xl font-semibold">{{ application.candidate }}</h1>
+    <span class="badge badge-primary">{{ application.get_stage_display }}</span>
+  </div>
+  <div class="card border border-base-300 bg-base-200">
+    <div class="card-body gap-6">
+      <dl class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <dt class="text-sm text-base-content/70">Candidate</dt>
+          <dd class="break-words"><a href="{% url 'hiring:candidate_detail' application.candidate.pk %}" class="link">{{ application.candidate }}</a></dd>
+        </div>
+        <div>
+          <dt class="text-sm text-base-content/70">Job</dt>
+          <dd class="break-words"><a href="{% url 'hiring:job_detail' application.job.pk %}" class="link">{{ application.job }}</a></dd>
+        </div>
+        <div>
+          <dt class="text-sm text-base-content/70">Applied on</dt>
+          <dd>{{ application.applied_on|date:"M j, Y" }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm text-base-content/70">Stage</dt>
+          <dd>{{ application.get_stage_display }}</dd>
+        </div>
+      </dl>
+
+      <section>
+        <h2 class="mb-2 font-semibold">Stage history</h2>
+        <ul class="flex flex-col gap-2">
+          {% for entry in history %}
+            <li class="rounded-box border border-base-300 bg-base-100 p-3">
+              <p>{% if entry.old_stage %}{{ entry.get_old_stage_display }} → {% endif %}{{ entry.get_new_stage_display }}</p>
+              <p class="text-sm text-base-content/70">{{ entry.changed_at|date:"M j, Y, g:i A T" }} · {{ entry.changed_by.get_username }}</p>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    </div>
+  </div>
+{% endblock %}

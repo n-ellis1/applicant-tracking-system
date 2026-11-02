@@ -13,6 +13,16 @@ urlpatterns = [
     path(
         "candidates/<int:pk>/delete/", views.candidate_delete, name="candidate_delete"
     ),
+    path(
+        "candidates/<int:pk>/applications/new/",
+        views.candidate_application_create,
+        name="candidate_application_create",
+    ),
+    path(
+        "pipeline/applications/<int:pk>/",
+        views.application_detail,
+        name="application_detail",
+    ),
     path("jobs/", views.job_list, name="job_list"),
     path("jobs/new/", views.job_create, name="job_create"),
     path("jobs/<int:pk>/", views.job_detail, name="job_detail"),
