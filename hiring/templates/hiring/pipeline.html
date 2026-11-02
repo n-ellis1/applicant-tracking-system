@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}{% if selected %}{{ selected.candidate }} · {% endif %}{% if job %}{{ job.title }}{% else %}Pipeline{% endif %}{% endblock %}
+
+{% block content %}
+  <div class="grid gap-4 lg:grid-cols-[15rem_minmax(0,18rem)_minmax(0,1fr)]">
+    {# Jobs sidebar: open and closed jobs, each a normal link. #}
+    <aside class="card h-fit border border-base-300 bg-base-200">
+      <nav class="card-body gap-1 p-2" aria-label="Jobs">
+        <div role="group" aria-label="Job filter" class="join w-full">
+          {% for value, label in job_filters %}
+            <a href="{{ filter_base }}?jobs={{ value }}" class="btn btn-sm join-item grow{% if value == jobs_filter %} btn-primary{% else %} btn-outline{% endif %}"{% if value == jobs_filter %} aria-current="true"{% endif %}>{{ label }}</a>
+          {% endfor %}
+        </div>
+        {% if job_hidden %}
+          <p class="mt-1 rounded-box bg-base-300 p-2 text-sm break-words">
+            {{ job.title }} is {{ job.get_status_display|lower }}, so the {{ jobs_filter|capfirst }} filter hides it.
+            <a href="{{ filter_base }}?jobs=all" class="link">Show all jobs</a>
+          </p>
+        {% endif %}
+        {% if jobs_filter != 'closed' %}
+          <h2 class="px-2 pt-2 text-sm font-semibold text-base-content/70">Open jobs</h2>
+          <ul class="menu w-full">
+            {% for sidebar_job in open_jobs %}
+              {% include "hiring/_sidebar_job.html" %}
+            {% empty %}
+              <li class="menu-disabled"><span>None</span></li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+        {% if jobs_filter != 'open' %}
+          <h2 class="px-2 pt-2 text-sm font-semibold text-base-content/70">Closed jobs</h2>
+          <ul class="menu w-full">
+            {% for sidebar_job in closed_jobs %}
+              {% include "hiring/_sidebar_job.html" %}
+            {% empty %}
+              <li class="menu-disabled"><span>None</span></li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </nav>
+    </aside>
+
+    {% if job %}
+      {# The selected job's applications. #}
+      <section class="card h-fit min-w-0 border border-base-300 bg-base-200" aria-labelledby="job-heading">
+        <div class="card-body gap-3 p-4">
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 id="job-heading" class="min-w-0 break-words text-xl font-semibold">{{ job.title }}</h1>
+            <span class="badge {% if job.status == 'open' %}badge-success{% else %}badge-neutral{% endif %}">{{ job.get_status_display }}</span>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            {% if job.status == 'open' %}
+              <a href="{% url 'hiring:job_application_create' job.pk %}" class="btn btn-sm btn-primary">Add application</a>
+            {% endif %}
+            <a href="{% url 'hiring:job_detail' job.pk %}" class="btn btn-sm btn-outline">Job details</a>
+          </div>
+
+          {% if applications %}
+            <ul class="menu w-full p-0" aria-label="Applications">
+              {% for application in applications %}
+                <li>
+                  <a href="{% url 'hiring:application_detail' application.pk %}?jobs={{ jobs_filter }}"{% if application == selected %} aria-current="true" class="menu-active"{% endif %}>
+                    <span class="flex min-w-0 grow flex-col">
+                      <span class="break-words font-medium">{{ application.candidate }}</span>
+                      <span class="break-all text-xs opacity-80">{{ application.candidate.email }}</span>
+                    </span>
+                    <span class="badge badge-sm badge-outline shrink-0">{{ application.get_stage_display }}</span>
+                  </a>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="text-base-content/80">
+              No applications for this job yet.{% if job.status != 'open' %} The job is closed, so new applications can't be added.{% endif %}
+            </p>
+          {% endif %}
+        </div>
+      </section>
+
+      {# Detail panel for the selected application. #}
+      <section class="card h-fit min-w-0 border border-base-300 bg-base-200" aria-label="Application details">
+        <div class="card-body gap-5 p-4">
+          {% if selected %}
+            {% include "hiring/_application_panel.html" %}
+          {% else %}
+            <p class="text-base-content/80">Select an application to see its details.</p>
+          {% endif %}
+        </div>
+      </section>
+    {% else %}
+      <div class="card h-fit border border-base-300 bg-base-200 lg:col-span-2">
+        <div class="card-body items-start gap-3">
+          <h1 class="card-title text-2xl">Pipeline</h1>
+          <p>There are no open jobs.</p>
+          <div class="flex flex-wrap gap-2">
+            <a href="{% url 'hiring:job_create' %}" class="btn btn-primary">Create a job</a>
+            {% if any_closed_jobs %}
+              <a href="{% url 'hiring:pipeline' %}?jobs=closed" class="btn btn-outline">Show closed jobs</a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}

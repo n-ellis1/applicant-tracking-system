@@ -6,6 +6,12 @@ app_name = "hiring"
 
 urlpatterns = [
     path("", views.pipeline, name="pipeline"),
+    path("pipeline/jobs/<int:job_pk>/", views.pipeline_job, name="pipeline_job"),
+    path(
+        "pipeline/jobs/<int:job_pk>/applications/new/",
+        views.job_application_create,
+        name="job_application_create",
+    ),
     path("candidates/", views.candidate_list, name="candidate_list"),
     path("candidates/new/", views.candidate_create, name="candidate_create"),
     path("candidates/<int:pk>/", views.candidate_detail, name="candidate_detail"),

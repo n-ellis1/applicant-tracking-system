@@ -28,6 +28,251 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 7: The pipeline workspace (plus the sidebar filter)
+
+### Prompts
+
+1. **Start Phase 7 (`/implement`).**
+   > /implement @prd/applicant-tracking-system.md @plans/applicant-tracking-system.md implement Phase 7 only
+   >
+   > Read CLAUDE.md, the approved plan, and prototypes/pipeline-ui-decisions.md. Use the chosen dark list-and-detail workspace as the UI reference.
+   >
+   > Follow the implement and tdd skills. Propose the TDD candidates, explain them in beginner-friendly language, and wait for my approval before writing code.
+   >
+   > Keep this phase scoped to the basic workspace, job-side application creation, counts, links, and empty states. Stage movement, grouped tabs/search, and HTMX selection belong to later phases.
+   >
+   > After automated checks pass, give me browser verification steps and wait for my confirmation. Don't mark the phase complete, commit, push, or start Phase 8 yet.
+
+2. **Approve all three candidates, splitting candidate 1 into two tests.**
+   > I approve all three candidates. For candidate 1, use separate tests for selecting the first open job and for the no-open-jobs empty state with closed jobs still accessible.
+   >
+   > Keep ordinary tests for rejecting forged duplicate and closed-job submissions through the new job-side entry point, even though it reuses the existing service.
+   >
+   > Start with the first landing-page test. Show me the test and RED result, then stop for approval before implementing it.
+
+3. **Approve the landing-selection test.**
+   > I approve this test. Implement selecting the first open job by title and marking its sidebar link as current. Show me the GREEN result and regression results, then stop before the empty-state test.
+
+4. **Confirm cycle 1 and start the empty-state test.**
+   > Yes, I agree. Write the empty-state test next, checking the message, create-job link, and closed jobs remaining accessible in the sidebar. Show me the RED result, then stop for approval before implementing it.
+
+5. **Approve the empty-state test.**
+   > I approve this test and the message wording. Add the empty-state message and create-job link while keeping closed jobs in the sidebar. Show me the GREEN result and regression results, then stop before the sidebar-count test.
+
+6. **Correction: approve narrowing the empty-state assertion.**
+   > I approve narrowing the assertion to the closed job's sidebar link as shown. Apply the correction and rerun the test and full suite.
+   >
+   > Record this as a test-scope correction: the original assertion also matched the top navigation. Show me the GREEN results before starting the sidebar-count test.
+
+7. **Start the sidebar-count test.**
+   > Yes, write the sidebar-count test next. Include active and final-stage applications, plus a closed job, and check the counts shown in the rendered sidebar. Show me the RED result, then stop for approval before implementing the counts.
+
+8. **Approve the sidebar-count test and wording.**
+   > I approve this test and the "N in progress" wording. Implement the active-only sidebar counts using the shared active-stage definition.
+   >
+   > Show me the GREEN result and full regression results, then stop before the job-side picker test.
+
+9. **Start the job-side picker test.**
+   > Yes, I agree. Proceed to the job-side picker test. Check that candidates already attached to this job are excluded, while candidates who applied only elsewhere and candidates with no applications remain eligible.
+   >
+   > Show me the test and RED result, then stop for approval before implementing the filter.
+
+10. **Approve the picker test.**
+    > I approve this test. Filter the picker to exclude candidates with any application for the selected job, regardless of stage, while keeping the normal candidate ordering.
+    >
+    > Show me the GREEN result and full regression results, then stop before building the remaining Phase 7 work.
+
+11. **Continue with the rest of Phase 7.**
+    > Yes, continue with the remaining Phase 7 work and ordinary tests as listed. Keep the dark list-and-detail design from the chosen prototype, with normal full-page selection for now.
+    >
+    > For the session log, record four RED-to-GREEN tests across the three candidates: landing selection, empty state, sidebar counts, and picker filtering. Include the approved empty-state test correction.
+    >
+    > Run all planned checks, then give me browser verification steps. Wait for my confirmation before marking Phase 7 complete, committing, pushing, or starting Phase 8.
+
+12. **Browser checks passed; add a sidebar filter.**
+    > All the Phase 7 browser checks passed. Before wrapping up, I'd like one UI improvement.
+    >
+    > Add an Open / Closed / All filter at the top of the jobs sidebar so I don't have to scroll past every open job to find closed ones.
+    >
+    > - Default to Open on the landing page.
+    > - When opening an application or job directly without a filter, default to that job's status so its sidebar link is visible.
+    > - Keep the sidebar filter in the URL and preserve it when selecting jobs or applications.
+    > - Filtering the sidebar shouldn't change the job or application currently displayed. If the selected job is hidden by the filter, show a short explanation.
+    > - Keep alphabetical ordering and the existing in-progress counts.
+    > - Use normal GET navigation for now, consistent with this phase.
+    >
+    > Update the PRD and plan to record this approved addition. Propose focused test candidates and wait for my approval before coding. Don't mark the phase complete or commit yet.
+
+13. **Choose the filter design options and approve the candidates.**
+    > For Decision 1, choose A: keep Open as the landing default and add a Show closed jobs link when there are no open jobs.
+    >
+    > For Decision 2, choose B: always include the current jobs filter in sidebar and application-selection links. I'd rather keep the URL handling straightforward than preserve the old href assertions.
+    >
+    > I approve all three TDD candidates and these test updates:
+    > - Count and sort tests use jobs=all when they need both statuses.
+    > - The empty-state test checks the Show closed jobs link.
+    > - Existing link assertions include the explicit jobs parameter.
+    >
+    > Changing the sidebar filter must preserve the current selection even on /. If needed, have its filter links target the selected job's URL so changing the filter doesn't choose a different job.
+    >
+    > Update the PRD and plan with these decisions. Then show me the first test and RED result, and stop for approval before implementing the filter.
+
+14. **Approve the filter-defaults test.**
+    > I approve this test. Implement the filter defaults and explicit jobs parameter in selection links, and apply the previously approved test updates.
+    >
+    > Show me the GREEN result and full regression results, then stop before the next filter test.
+
+15. **Reword candidate 3 and start the hidden-job test.**
+    > Yes, I agree the filter defaults are implemented. Choose A for candidate 3: test that filter controls target the currently displayed job or application, including the selected landing job, so switching filters preserves the selection.
+    >
+    > Cover explicit jobs parameters and unknown-value fallback with ordinary regression tests. Don't remove working behavior to force RED.
+    >
+    > Proceed with candidate 2 first. Show me the test and RED result, then stop for approval before implementing the hidden-job note.
+
+16. **Approve the hidden-job test.**
+    > I approve this test and the note wording. Add the hidden-job explanation without changing the selected job or application.
+    >
+    > Include the Show all jobs link with candidate 3, preserving the current selection. Show me the GREEN result and full regression results, then stop before that next test.
+
+17. **Start the filter-links test.**
+    > Yes, I agree. Write candidate 3's test for filter links preserving the current selection. Cover the landing page, a selected job, and a selected application, plus the note's Show all jobs link.
+    >
+    > Show me the test and RED result, then stop for approval before implementing the links.
+
+18. **Approve the filter-links test and markup.**
+    > I approve this test and the proposed filter-group markup. Implement the links and active-filter styling.
+    >
+    > Show me the GREEN result and full regression results. Then complete the planned ordinary tests for unknown values, explicit filter parameters, and the no-job empty state, and provide browser checks for the sidebar addition.
+    >
+    > Don't mark Phase 7 complete or commit until I've checked the filter in the browser.
+
+19. **Filter checks passed; temporarily close the open jobs.**
+    > The sidebar filter checks passed: switching filters preserves selection, links keep jobs=, direct links use the job's status, invalid values fall back correctly, and counts, ordering, and narrow-screen styling look good.
+    >
+    > Help me verify the no-open-jobs empty state without manually closing dozens of jobs. Temporarily close the currently open jobs through the existing service, keeping their IDs so we can reopen only those jobs afterward. Preserve jobs that were already closed.
+    >
+    > Give me the browser check steps, then wait for me before restoring the jobs. Don't mark Phase 7 complete or commit yet.
+
+20. **Empty state passed; restore, mark complete and propose CLAUDE.md.**
+    > All empty-state browser checks passed. Restore only the 29 jobs recorded in your saved ID file through services.reopen_job. Leave the 13 originally closed jobs unchanged, and confirm the counts return to 29 open and 13 closed.
+    >
+    > After restoration, mark Phase 7 complete and show me any proposed CLAUDE.md updates. Keep them concise and limited to durable conventions verified in this phase. Don't commit or start Phase 8 yet.
+
+21. **Correction: approve CLAUDE.md with my ordering line, and write this log.**
+    > Before wrapping up, confirm the saved 29 jobs were reopened and the database is back to 29 open and 13 closed jobs, with the originally closed jobs unchanged.
+    >
+    > I approve the CLAUDE.md additions with this replacement for the ordering line:
+    > - After aggregate annotations, specify ordering explicitly where the page requires it; don't rely on Meta.ordering.
+    >
+    > Apply the updates and report CLAUDE.md's line count.
+    >
+    > Write this session log to PROMPTS.md according to its instructions. Include the original four RED-to-GREEN tests, the three sidebar-filter tests, approved test corrections, PRD/plan updates, browser checks, and temporary job closure and restoration.
+    >
+    > Then show me the changed-file summary and proposed commit message. Don't commit or start Phase 8 yet.
+
+22. **Correction: fix this log's prompt list and the commit message, then commit and push.**
+    > I approve the implementation and file list, with two documentation corrections before committing:
+    >
+    > 1. Fix this session's new log entry to include the omitted CLAUDE.md approval prompt in its actual position. Check the prompt count against the conversation and update it accurately. Preserve older entries.
+    >
+    > 2. Reword the counts bullet in the commit message:
+    > "Use with_in_progress_count() for active counts in the sidebar, jobs list, and close-job page. The candidates list shows each candidate's total applications."
+    >
+    > With those corrections, I approve the commit message. Commit Phase 7 on main and push to origin using the scratch message file method. Report whether the push succeeded and the working tree is clean. Don't start Phase 8.
+
+### Summary
+
+- **Outcome:**
+  - **Workspace:** `/`, `/pipeline/jobs/<pk>/` and `/pipeline/applications/<pk>/` all render `hiring/templates/hiring/pipeline.html` through one `_workspace` view helper. It has three columns on wide screens and stacks on narrow ones, in the dark theme:
+    - **jobs sidebar:** a partial, `_sidebar_job.html`, used for each job; each job is a normal link with an in-progress badge
+    - **application list:** the selected job's applications, sorted by candidate name for now, each with a stage badge
+    - **detail panel:** a partial, `_application_panel.html`, with the candidate summary, job, applied-on date, stage, a DaisyUI stage progress indicator and the history timeline. For a finished application, the indicator fills the active stages up to the one before the outcome (read from the last history entry), then a green Hired or red Rejected/Withdrawn step.
+    - `/` opens the first open job by title. A job with no applications says so and offers Add application only when open.
+    - The Phase 6 `application_detail.html` and the Phase 1 `placeholder.html` were deleted.
+  - **Job-side recording:** `/pipeline/jobs/<pk>/applications/new/` uses a new `JobApplicationForm`. Both forms now share an `ApplicationForm` base holding the applied-on field, with `field_order` keeping the picker first.
+    - The candidate picker is an `EligibleChoiceField` that leaves out anyone with any application for that job and shows "Name (email)".
+    - Saving goes through `services.create_application`. A duplicate error goes under the candidate picker; a closed-job error is a non-field error. A closed job's page explains it and shows no form.
+    - Both entry points land in the workspace with the new application selected, and candidate-detail links open the workspace.
+  - **Counts:** `JobOpening.objects.with_in_progress_count()` counts applications in `ACTIVE_STAGES` and re-applies the default ordering. It backs the sidebar, the jobs list's active column and the close-job page. The candidates list counts every application.
+  - **Sidebar filter (added after the first browser checks):**
+    - Open / Closed / All links in a `role="group"` `aria-label="Job filter"` button group. The active filter is filled, with `aria-current="true"`.
+    - `jobs=` defaults to Open on `/` and to the displayed job's status on job and application URLs; unknown values fall back.
+    - Sidebar job links and application links always carry `jobs=`.
+    - The filter links target the current application or job URL (the landing job's URL on `/`, or `/` in the empty state), so the selection never changes.
+    - When the filter hides the selected job, the sidebar says "{title} is {status}, so the {Filter} filter hides it." with a Show all jobs link.
+    - The empty state has Create a job and Show closed jobs (`/?jobs=closed`).
+  - **TDD, original three candidates (four RED-to-GREEN tests):**
+    1. **Landing selection:** RED with `assert None == <JobOpening: beta Builder>`. The `pipeline_job` route was added first as scaffolding, still showing the placeholder, because the test's last line reverses it. Selecting the first open job and marking its sidebar link `aria-current="page"` made it GREEN.
+    2. **Empty state:** RED on the missing "There are no open jobs." message. Adding the message and create-job link made it GREEN after the approved correction below.
+    3. **Sidebar counts:** RED with `assert None == 3`. `with_in_progress_count()` and the badge with screen-reader-only "in progress" text made it GREEN, including a closed job's count and a 0.
+    4. **Job-side picker:** RED with the full candidate list returned (Rita Adams and Jane Doe included). Scaffolding was the shared `ApplicationForm`, `JobApplicationForm` with a deliberately unfiltered `Candidate.objects.all()`, the URL, a GET-only view and a shared form template. `Candidate.objects.exclude(applications__job=job)` made it GREEN.
+  - **TDD, sidebar filter (three RED-to-GREEN tests):**
+    1. **Defaults:** RED on `'href="/pipeline/jobs/1/?jobs=open" aria-current="page"'` missing. Parsing `jobs=` with per-page defaults, filtering the two sidebar groups and adding `?jobs=` to links made it GREEN.
+    2. **Hidden-job note:** RED only on the missing note. Everything else (display kept, link hidden) already passed. A `job_hidden` flag and the note made it GREEN.
+    3. **Filter links keep the selection:** RED with `[] == [...]` on `/`, because no filter group existed. It covers `/`, `/?jobs=closed`, a closed job, an application, and an application whose job the filter hides, plus Show all jobs. Computing the filter links' base URL from the selection made it GREEN.
+  - **All seven were genuine RED-to-GREEN cycles.**
+  - **Ordinary tests:** 23 more test functions in `hiring/tests/test_pipeline.py`. They cover:
+    - job-side save landing on the selected application
+    - a forged duplicate refused even when the existing application is Withdrawn
+    - the closed-job page and a forged closed-job POST writing nothing
+    - future applied-on dates
+    - the picker's email label
+    - sidebar order (open then closed, each by title)
+    - a job's workspace (closed job reachable, only its applications) and a 404 for an unknown job
+    - empty-application states for open and closed jobs
+    - the application URL rendering the selected workspace and details
+    - progress for an active application and for Rejected after Interview
+    - candidate-side save and candidate-detail links opening the workspace
+    - real counts on the jobs list, candidates list and close-job page
+    - the four filter regressions: unknown value fallback, `all` carried through, `closed` carried on an open job's applications, and empty-state filter links targeting `/`
+  - **Automated checks:** 199 tests passed. `ruff check`, `ruff format --check` and `makemigrations --check` were clean, and `tailwind build` compiled the new classes. No migration was needed: the custom `JobOpening` manager adds none.
+  - **Browser checks (by me):** all passed.
+    - The original Phase 7 checks: landing, switching jobs, job-side recording and picker exclusion, candidate links, counts and narrow-screen stacking.
+    - The filter checks: switching keeps the selection, links keep `jobs=`, direct links use the job's status, invalid values fall back, and counts, ordering and narrow-screen styling hold.
+    - The empty-state checks with every job closed.
+  - **Temporary job closure and restoration:**
+    - To check the empty state, the agent closed all 29 open jobs through `services.close_job`, saving their IDs to a scratchpad file first. The close script refused to run if that file already existed.
+    - After my checks, it reopened exactly those 29 through `services.reopen_job` and deleted the file. It confirmed 29 open (IDs matching the saved list, none with a closed date) and 13 closed (the original IDs).
+    - The 13 originally closed jobs were untouched: their latest update is from before this session.
+    - Side effect: the 29 reopened jobs' "Last updated" times now show the restore time.
+  - **PRD and plan:**
+    - The PRD's US-55, workspace Layout ("Sidebar filter", marked as an approved addition during Phase 7) and Empty state now describe the filter and the Show closed jobs link.
+    - In the plan, the URL table lists `jobs=`. Phase 7 gained the filter in What to build, an updated empty-state line, a new acceptance criterion and manual checks. Phase 10 notes that switching jobs keeps `jobs=` while tab and search reset.
+    - All eight Phase 7 acceptance criteria are ticked.
+  - **CLAUDE.md:** Project layout gained the `pipeline.html` / `_workspace` line. Conventions gained:
+    - the shared `ApplicationForm`
+    - `with_in_progress_count()` as the definition of active
+    - my wording for ordering after aggregate annotations
+    - the workspace taking its selection from the URL path, with `jobs=` on every sidebar, application and filter link
+    - It's now 66 lines.
+- **Deviations:**
+  - **Candidate 1 split:** I asked for separate tests for landing selection and the empty state, which made four TDD tests across three candidates.
+  - **Extra ordinary tests:** I required forged duplicate and closed-job tests through the job-side entry point even though it reuses the service.
+  - **Scope addition:** after the Phase 7 browser checks passed, I added the sidebar filter to this phase and had the PRD and plan updated as an approved addition.
+  - **Filter decisions:**
+    - For Decision 1, I chose the agent's recommendation A: keep Open on `/` and add Show closed jobs.
+    - For Decision 2, I overrode the recommendation (include `jobs=` only when it differs from the default) and chose B: always carry `jobs=`, accepting updates to approved href assertions.
+  - **Selection on `/`:** I required the filter links to keep the selection even on the landing page, so they target the landing job's URL.
+  - **Candidate 3 reworded:** the agent pointed out that building the explicit `jobs=` links had already covered candidate 3's original wording. I chose to reword it to the filter links keeping the selection, and to cover explicit parameters and the unknown-value fallback with ordinary regression tests, without removing working behavior to force RED.
+  - **Empty-state verification:** I asked the agent to close and restore the open jobs through the services instead of doing it by hand.
+  - **CLAUDE.md wording:** I replaced the agent's ordering line with my own.
+- **Sideways:**
+  - **Test-scope correction (approved):** the empty-state test's `'aria-current="page"' not in content` could never pass, because the top nav marks the Pipeline link that way on every Pipeline page. With my approval it was narrowed to the closed job's sidebar link. The original RED still stood, since it failed on the missing message first. The later approved filter update replaced this assertion with the Show closed jobs link check, and the test was renamed to end in `…_closed_jobs_link`.
+  - **Approved filter test updates:** the count and sort tests load `?jobs=all`, and href assertions in the landing, job-side save, job workspace, application URL and candidate-link tests include explicit `jobs=` values.
+  - **Mechanical test repairs:**
+    - the `sidebar_count` helper matched links with `?jobs=`, and later skipped the filter group because the filter links target the same job URL
+    - the hidden-job test's first draft also matched the Add application link's URL prefix; it was fixed before I saw it
+  - **Lost ordering:** annotating with `Count` made Django drop `Meta.ordering` on the jobs and candidates lists (and the untested sidebar). The existing sort tests caught it. The default ordering is now explicit, and a sidebar order test was added.
+  - **Escaped apostrophe again:** a new ordinary test expected `can&#x27;t` in static template text, the same mistake as Phases 3 and 6. Fixed to a plain `can't`.
+  - **Temporary scripts:**
+    - `__file__` isn't defined under `manage.py shell -c`
+    - rewriting the scripts with PowerShell's `Set-Content -Encoding utf8` added a byte-order mark, so the first close attempt failed with a `SyntaxError` before running any code; no job was changed
+    - the mark was stripped, and the scripts ran through Git Bash
+  - **Pre-existing data:** the 13 originally closed "Test Role" jobs have no closed date, apparently from bulk creation before closing existed. They were left as they were.
+  - **Formatter and line endings:** `ruff format` rewrapped lines in `views.py`, `forms.py` and the test file. Git's LF-to-CRLF warnings are informational.
+  - **Skill lookup:** `/implement` isn't a registered skill in this session, so the agent read `.claude/skills/implement/SKILL.md` directly.
+  - **Miscounted prompts:** when presenting this log, the agent wrongly said a separate CLAUDE.md approval prompt had been left out. Checking the conversation showed there was none: prompt 20 asked for the proposal, and prompt 21 approved it. The agent corrected the claim instead of inserting a prompt that never happened, and added prompt 22 because it changed this log.
+
 ## 2026-11-01 — Phase 6: Recording an application from the candidate page
 
 ### Prompts

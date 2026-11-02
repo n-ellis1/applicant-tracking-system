@@ -9,28 +9,35 @@
         {% csrf_token %}
         <h1 class="card-title break-words text-2xl">{{ title }}</h1>
 
-        {% if not form.job.field.queryset.exists %}
-          <div role="alert" class="alert alert-info">There are no open jobs this candidate hasn't applied to.</div>
+        {% if unavailable %}
+          <div role="alert" class="alert alert-warning">{{ unavailable }}</div>
+          <div class="flex flex-wrap gap-2">
+            <a href="{{ cancel_url }}" class="btn btn-ghost">Back</a>
+          </div>
+        {% else %}
+          {% if not picker.field.queryset.exists %}
+            <div role="alert" class="alert alert-info">{{ empty_message }}</div>
+          {% endif %}
+
+          {% for error in form.non_field_errors %}
+            <div role="alert" class="alert alert-error">{{ error }}</div>
+          {% endfor %}
+
+          {% for field in form %}
+            <fieldset class="fieldset">
+              <label class="fieldset-legend" for="{{ field.id_for_label }}">{{ field.label }}</label>
+              {{ field }}
+              {% for error in field.errors %}
+                <p class="text-sm text-error">{{ error }}</p>
+              {% endfor %}
+            </fieldset>
+          {% endfor %}
+
+          <div class="flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-primary">Save</button>
+            <a href="{{ cancel_url }}" class="btn btn-ghost">Cancel</a>
+          </div>
         {% endif %}
-
-        {% for error in form.non_field_errors %}
-          <div role="alert" class="alert alert-error">{{ error }}</div>
-        {% endfor %}
-
-        {% for field in form %}
-          <fieldset class="fieldset">
-            <label class="fieldset-legend" for="{{ field.id_for_label }}">{{ field.label }}</label>
-            {{ field }}
-            {% for error in field.errors %}
-              <p class="text-sm text-error">{{ error }}</p>
-            {% endfor %}
-          </fieldset>
-        {% endfor %}
-
-        <div class="flex flex-wrap gap-2">
-          <button type="submit" class="btn btn-primary">Save</button>
-          <a href="{% url 'hiring:candidate_detail' candidate.pk %}" class="btn btn-ghost">Cancel</a>
-        </div>
       </form>
     </div>
   </div>

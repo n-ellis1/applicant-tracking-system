@@ -103,15 +103,23 @@ class EligibleChoiceField(forms.ModelChoiceField):
             ) from None
 
 
-class CandidateApplicationForm(forms.Form):
-    job = EligibleChoiceField(
-        queryset=JobOpening.objects.none(),
-        widget=forms.Select(attrs={"class": "select w-full"}),
-    )
+class ApplicationForm(forms.Form):
+    """Fields shared by both ways of recording an application."""
+
     applied_on = forms.DateField(
         initial=timezone.localdate,
         validators=[validate_not_future],
         widget=forms.DateInput(attrs={"class": "input w-full", "type": "date"}),
+    )
+
+    # The picker comes first on both forms.
+    field_order = ["job", "candidate", "applied_on"]
+
+
+class CandidateApplicationForm(ApplicationForm):
+    job = EligibleChoiceField(
+        queryset=JobOpening.objects.none(),
+        widget=forms.Select(attrs={"class": "select w-full"}),
     )
 
     def __init__(self, *args, candidate, **kwargs):
@@ -121,3 +129,22 @@ class CandidateApplicationForm(forms.Form):
         self.fields["job"].queryset = JobOpening.objects.filter(
             status=JobOpening.Status.OPEN
         ).exclude(applications__candidate=candidate)
+
+
+class JobApplicationForm(ApplicationForm):
+    candidate = EligibleChoiceField(
+        queryset=Candidate.objects.none(),
+        widget=forms.Select(attrs={"class": "select w-full"}),
+    )
+
+    def __init__(self, *args, job, **kwargs):
+        super().__init__(*args, **kwargs)
+        # The picker offers only candidates who haven't applied to this job,
+        # whatever the stage. The service re-checks every submission.
+        self.fields["candidate"].queryset = Candidate.objects.exclude(
+            applications__job=job
+        )
+        # Names can repeat; the email tells candidates apart.
+        self.fields["candidate"].label_from_instance = lambda candidate: (
+            f"{candidate} ({candidate.email})"
+        )

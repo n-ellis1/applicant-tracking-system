@@ -1,0 +1,60 @@
+{# Detail panel for the selected application. Candidate and job aren't editable. #}
+<div class="flex flex-wrap items-center gap-2">
+  <h2 class="min-w-0 break-words text-xl font-semibold">{{ selected.candidate }}</h2>
+  <span class="badge badge-primary">{{ selected.get_stage_display }}</span>
+</div>
+
+<ul class="steps steps-vertical w-full sm:steps-horizontal" aria-label="Stage progress">
+  {% for step in progress %}
+    <li class="step{% if step.tone == 'primary' %} step-primary{% elif step.tone == 'success' %} step-success{% elif step.tone == 'error' %} step-error{% endif %}"{% if step.current %} aria-current="step"{% endif %}>
+      <span class="text-xs">{{ step.label }}</span>
+    </li>
+  {% endfor %}
+</ul>
+
+<dl class="grid gap-4 sm:grid-cols-2">
+  <div>
+    <dt class="text-sm text-base-content/70">Candidate</dt>
+    <dd class="break-words"><a href="{% url 'hiring:candidate_detail' selected.candidate.pk %}" class="link">{{ selected.candidate }}</a></dd>
+  </div>
+  <div>
+    <dt class="text-sm text-base-content/70">Email</dt>
+    <dd class="break-all">{{ selected.candidate.email }}</dd>
+  </div>
+  {% if selected.candidate.phone %}
+    <div>
+      <dt class="text-sm text-base-content/70">Phone</dt>
+      <dd class="break-words">{{ selected.candidate.phone }}</dd>
+    </div>
+  {% endif %}
+  {% if selected.candidate.location %}
+    <div>
+      <dt class="text-sm text-base-content/70">Location</dt>
+      <dd class="break-words">{{ selected.candidate.location }}</dd>
+    </div>
+  {% endif %}
+  <div>
+    <dt class="text-sm text-base-content/70">Job</dt>
+    <dd class="break-words"><a href="{% url 'hiring:job_detail' selected.job.pk %}" class="link">{{ selected.job }}</a></dd>
+  </div>
+  <div>
+    <dt class="text-sm text-base-content/70">Applied on</dt>
+    <dd>{{ selected.applied_on|date:"M j, Y" }}</dd>
+  </div>
+  <div>
+    <dt class="text-sm text-base-content/70">Stage</dt>
+    <dd>{{ selected.get_stage_display }}</dd>
+  </div>
+</dl>
+
+<section>
+  <h3 class="mb-2 font-semibold">Stage history</h3>
+  <ol class="flex flex-col gap-2">
+    {% for entry in history %}
+      <li class="rounded-box border border-base-300 bg-base-100 p-3">
+        <p>{% if entry.old_stage %}{{ entry.get_old_stage_display }} → {% endif %}{{ entry.get_new_stage_display }}</p>
+        <p class="text-sm text-base-content/70">{{ entry.changed_at|date:"M j, Y, g:i A T" }} · {{ entry.changed_by.get_username }}</p>
+      </li>
+    {% endfor %}
+  </ol>
+</section>

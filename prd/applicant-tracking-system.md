@@ -89,7 +89,7 @@ Staff move applications between stages without reloading the whole page. Every m
 54. As a hiring employee, I want stage history to be something staff can't edit or delete on its own, so that the record of what happened can be trusted. The only exception is deleting an eligible never-moved application, which also removes its initial history entry.
 
 ### Pipeline workspace
-55. As a hiring employee, I want a sidebar of job openings, including closed ones, with in-progress counts, so that I can switch between jobs.
+55. As a hiring employee, I want a sidebar of job openings, including closed ones, with in-progress counts, so that I can switch between jobs. I want to filter it to Open, Closed or All jobs, so that I can find a closed job without scrolling past every open one.
 56. As a hiring employee, I want the selected job's applications grouped by stage in pipeline order, newest stage change first within each group, so that I can scan a busy opening.
 57. As a hiring employee, I want Active, Finished and All tabs with counts, so that I can focus on people in progress or find Hired, Rejected and Withdrawn applications.
 58. As a hiring employee, I want to search the job's applications by name or email, so that I can find a candidate in a busy pipeline.
@@ -195,6 +195,12 @@ Applies to all stage moves and reopens. Full rationale is in `prototypes/stage-r
 ### Pipeline workspace
 The workspace follows the direction chosen in the UI prototype: Variant C, list-and-detail, with a dark theme.
 - **Layout:** jobs sidebar (open and closed jobs, with in-progress counts), the selected job's application list, and a detail panel. The jobs sidebar appears only in the workspace.
+- **Sidebar filter** (approved addition during Phase 7, 2026-11-01):
+  - Open, Closed and All links at the top of the sidebar, kept in the URL as `jobs=open|closed|all`.
+  - Without a valid `jobs` value, the landing page defaults to Open, and a job or application URL defaults to that job's status, so its sidebar link is visible.
+  - Sidebar job links and application-selection links always carry the current `jobs` value.
+  - Changing the filter never changes the displayed job or application. Its links target the current job or application URL, including on the landing page. If the filter hides the selected job, the sidebar says so briefly.
+  - Alphabetical order and in-progress counts are unchanged. Navigation is normal GET.
 - **Application list:**
   - Active (default), Finished and All tabs, each with a count.
   - Groups by stage in pipeline order, with the most recent stage change first within each group.
@@ -218,7 +224,7 @@ The workspace follows the direction chosen in the UI prototype: Variant C, list-
   - Views return a partial for HTMX requests and the full page otherwise, including HTMX history-restore requests, which must receive the full page.
 - **Filter mismatch:** if a stage move leaves the selected application outside the current tab or search, its updated details stay visible with a note that it no longer matches the list. The tab and search don't change automatically.
 - **Stale moves:** if a submitted move is no longer allowed, the panel shows a clear error and refreshed actions. The stage doesn't change and no history entry is written.
-- **Empty state:** with no open jobs, the workspace shows a clear message and a link to create a job. Closed jobs remain accessible.
+- **Empty state:** with no open jobs, the workspace shows a clear message and a link to create a job. Closed jobs remain accessible through a "Show closed jobs" link that switches the sidebar filter to Closed.
 - **Theme:** dark gray backgrounds, readable text, and clear contrast for buttons, stage labels and blocked actions, across panels, forms, dropdowns, notes and history.
 - **Responsive:** three columns side by side on wide screens, stacked on narrow screens. Selecting an application on a narrow screen brings the detail panel into view. Forms, buttons and long text must not cause horizontal page scrolling. This is a design choice for usability, not an assignment requirement.
 

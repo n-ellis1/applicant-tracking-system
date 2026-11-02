@@ -31,6 +31,7 @@ Internal Django applicant tracking system where hiring staff track candidates, j
 - `hiring/`: the only app. URL namespace `hiring`; templates in `hiring/templates/hiring/`; tests in `hiring/tests/test_*.py`, with shared fixtures in `hiring/tests/conftest.py` and data builders in `hiring/tests/helpers.py`.
 - `hiring/stages.py`: the stage list and the active and final groups. No database access.
 - `hiring/services.py`: application creation and job close/reopen operations. Views use these shared operations.
+- `hiring/templates/hiring/pipeline.html`: the pipeline workspace (jobs sidebar, application list, detail panel), with partials `_sidebar_job.html` and `_application_panel.html`. One `_workspace` view helper renders it for `/`, job URLs and application URLs.
 - `templates/`: `base.html`, nav partials `_nav.html` / `_nav_links.html`, `registration/login.html`.
 - `assets/css/source.css`: Tailwind + DaisyUI source. It scans the template folders and `hiring/forms.py` (for widget classes). Builds to `static/css/tailwind.css` (gitignored).
 - `static/js/htmx.min.js`: vendored HTMX 2.0.4.
@@ -49,6 +50,10 @@ Internal Django applicant tracking system where hiring staff track candidates, j
 - Service operations report expected business-rule refusals with `ValidationError`. Views display the message in the relevant form or panel.
 - Validate service operations against current database state. Translate only identified constraint failures into friendly errors; let unrelated database errors propagate.
 - Where a service checks eligibility, `EligibleChoiceField` displays eligible records while allowing existing submitted records to reach that validation. Never rely on picker filtering alone.
+- Both application entry points build on `ApplicationForm` (applied-on date) and add their own `EligibleChoiceField` picker.
+- "Active" or "in progress" means a stage in `ACTIVE_STAGES`. Count it with `JobOpening.objects.with_in_progress_count()` rather than recounting.
+- After aggregate annotations, specify ordering explicitly where the page requires it; don't rely on `Meta.ordering`.
+- Workspace pages take the displayed job and application from the URL path, never from the sidebar filter. Every sidebar job link, application link and filter link carries `jobs=open|closed|all` explicitly.
 - Never edit or regenerate a migration that has been applied or committed; add a new migration.
 - List pages read search and filter from GET, show 25 per page, and fall back to the default filter for unknown values. Page links carry the cleaned search and filter values.
 - Tests use pytest functions with pytest-django's `client` and `db` fixtures, not `TestCase` classes.

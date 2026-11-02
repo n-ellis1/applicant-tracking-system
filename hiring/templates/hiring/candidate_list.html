@@ -35,8 +35,7 @@
                   <td><a href="{% url 'hiring:candidate_detail' candidate.pk %}" class="link link-hover font-medium">{{ candidate.last_name }}, {{ candidate.first_name }}</a></td>
                   <td class="break-all">{{ candidate.email }}</td>
                   <td>{{ candidate.get_source_display }}</td>
-                  {# Applications arrive in a later phase. #}
-                  <td class="text-right">0</td>
+                  <td class="text-right">{{ candidate.application_count }}</td>
                 </tr>
               {% endfor %}
             </tbody>

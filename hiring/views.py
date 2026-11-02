@@ -2,29 +2,141 @@ from urllib.parse import urlencode
 
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
-from django.db.models import ProtectedError, Q
+from django.db.models import Count, ProtectedError, Q
+from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET, require_POST
 
 from . import services
-from .forms import CandidateApplicationForm, CandidateForm, JobOpeningForm, SkillForm
+from .forms import (
+    CandidateApplicationForm,
+    CandidateForm,
+    JobApplicationForm,
+    JobOpeningForm,
+    SkillForm,
+)
 from .models import Application, Candidate, JobOpening, Skill
+from .stages import ACTIVE_STAGES, FINAL_STAGES, Stage
 
-# Placeholder pages for the top navigation. Later phases replace each one.
+# Pipeline workspace
 
 
-def _placeholder(request, title, active_nav):
-    return render(
-        request,
-        "hiring/placeholder.html",
-        {"title": title, "active_nav": active_nav},
-    )
+def _progress_steps(application, history):
+    """Steps for the stage progress indicator, in pipeline order."""
+    stage = application.stage
+    if stage in FINAL_STAGES:
+        # Mark the active stages reached before the outcome.
+        before = history[-1].old_stage if history else ""
+        reached = ACTIVE_STAGES.index(before) if before in ACTIVE_STAGES else -1
+        tone = "success" if stage == Stage.HIRED else "error"
+        last = {"label": Stage(stage).label, "tone": tone, "current": True}
+    else:
+        reached = ACTIVE_STAGES.index(stage)
+        last = {"label": Stage.HIRED.label, "tone": "", "current": False}
+    steps = [
+        {
+            "label": active.label,
+            "tone": "primary" if index <= reached else "",
+            "current": active == stage,
+        }
+        for index, active in enumerate(ACTIVE_STAGES)
+    ]
+    return [*steps, last]
+
+
+def _workspace(request, job, selected=None):
+    # job is None only on the landing page when no job is open.
+    # The sidebar filter defaults to the job's status so its link is visible;
+    # the landing page defaults to Open.
+    jobs_filter = request.GET.get("jobs")
+    if jobs_filter not in dict(JOB_STATUS_FILTERS):
+        jobs_filter = job.status if job is not None else JobOpening.Status.OPEN
+    # Filter links keep whatever is displayed, so switching never selects a
+    # different job: on the landing page they target the landing job's URL.
+    if selected is not None:
+        filter_base = reverse("hiring:application_detail", args=[selected.pk])
+    elif job is not None:
+        filter_base = reverse("hiring:pipeline_job", args=[job.pk])
+    else:
+        filter_base = reverse("hiring:pipeline")
+    jobs = JobOpening.objects.with_in_progress_count()
+    context = {
+        "job": job,
+        "jobs_filter": jobs_filter,
+        "job_filters": JOB_STATUS_FILTERS,
+        "filter_base": filter_base,
+        "open_jobs": [
+            j
+            for j in jobs
+            if j.status == JobOpening.Status.OPEN and jobs_filter != "closed"
+        ],
+        "closed_jobs": [
+            j
+            for j in jobs
+            if j.status == JobOpening.Status.CLOSED and jobs_filter != "open"
+        ],
+        "any_closed_jobs": any(j.status == JobOpening.Status.CLOSED for j in jobs),
+        # The filter never changes the displayed job, but it can hide its link.
+        "job_hidden": job is not None and jobs_filter not in ("all", job.status),
+        "selected": selected,
+        "active_nav": "pipeline",
+    }
+    if job is not None:
+        # A simple list for now, by candidate name.
+        context["applications"] = job.applications.select_related("candidate").order_by(
+            Lower("candidate__last_name"), Lower("candidate__first_name"), "pk"
+        )
+    if selected is not None:
+        history = list(selected.history.select_related("changed_by"))
+        context["history"] = history
+        context["progress"] = _progress_steps(selected, history)
+    return render(request, "hiring/pipeline.html", context)
 
 
 def pipeline(request):
-    return _placeholder(request, "Pipeline", "pipeline")
+    # Land on the first open job by title.
+    job = JobOpening.objects.filter(status=JobOpening.Status.OPEN).first()
+    return _workspace(request, job)
+
+
+def pipeline_job(request, job_pk):
+    return _workspace(request, get_object_or_404(JobOpening, pk=job_pk))
+
+
+def job_application_create(request, job_pk):
+    job = get_object_or_404(JobOpening, pk=job_pk)
+    form = JobApplicationForm(request.POST or None, job=job)
+    if request.method == "POST" and form.is_valid():
+        try:
+            application = services.create_application(
+                candidate=form.cleaned_data["candidate"],
+                job=job,
+                applied_on=form.cleaned_data["applied_on"],
+                changed_by=request.user,
+            )
+        except ValidationError as error:
+            # A duplicate is about the chosen candidate; a closed job isn't.
+            form.add_error("candidate" if error.code == "duplicate" else None, error)
+        else:
+            return redirect("hiring:application_detail", pk=application.pk)
+    workspace_url = reverse("hiring:pipeline_job", args=[job.pk])
+    return render(
+        request,
+        "hiring/application_form.html",
+        {
+            "form": form,
+            "picker": form["candidate"],
+            "empty_message": "Every candidate has already applied to this job.",
+            "unavailable": (
+                services.CLOSED_JOB if job.status == JobOpening.Status.CLOSED else ""
+            ),
+            "cancel_url": workspace_url,
+            "title": f"New application for {job}",
+            "active_nav": "pipeline",
+        },
+    )
 
 
 # Candidates
@@ -32,7 +144,10 @@ def pipeline(request):
 
 def candidate_list(request):
     q = request.GET.get("q", "").strip()
-    candidates = Candidate.objects.all()
+    # Django drops Meta.ordering from GROUP BY queries, so order explicitly.
+    candidates = Candidate.objects.annotate(
+        application_count=Count("applications")
+    ).order_by(*Candidate._meta.ordering)
     if q:
         candidates = candidates.filter(
             Q(first_name__icontains=q)
@@ -120,7 +235,9 @@ def candidate_application_create(request, pk):
         "hiring/application_form.html",
         {
             "form": form,
-            "candidate": candidate,
+            "picker": form["job"],
+            "empty_message": "There are no open jobs this candidate hasn't applied to.",
+            "cancel_url": reverse("hiring:candidate_detail", args=[candidate.pk]),
             "title": f"New application for {candidate}",
             "active_nav": "candidates",
         },
@@ -152,20 +269,12 @@ def candidate_delete(request, pk):
 
 @require_GET
 def application_detail(request, pk):
-    # A basic page until the pipeline workspace replaces it. Candidate and job
-    # are shown but never editable.
+    # The workspace with the application's job open and the application
+    # selected. Candidate and job are shown but never editable.
     application = get_object_or_404(
         Application.objects.select_related("candidate", "job"), pk=pk
     )
-    return render(
-        request,
-        "hiring/application_detail.html",
-        {
-            "application": application,
-            "history": application.history.select_related("changed_by"),
-            "active_nav": "pipeline",
-        },
-    )
+    return _workspace(request, application.job, application)
 
 
 # Jobs
@@ -180,7 +289,7 @@ def job_list(request):
     if status not in dict(JOB_STATUS_FILTERS):
         status = "open"
 
-    jobs = JobOpening.objects.all()
+    jobs = JobOpening.objects.with_in_progress_count()
     if status != "all":
         jobs = jobs.filter(status=status)
     if q:
@@ -269,7 +378,7 @@ def _next_or(request, default):
 
 
 def job_close(request, pk):
-    job = get_object_or_404(JobOpening, pk=pk)
+    job = get_object_or_404(JobOpening.objects.with_in_progress_count(), pk=pk)
     job_detail = reverse("hiring:job_detail", args=[pk])
     if request.method == "POST":
         services.close_job(job)
@@ -280,8 +389,7 @@ def job_close(request, pk):
         "hiring/job_confirm_close.html",
         {
             "job": job,
-            # Applications arrive in a later phase.
-            "active_count": 0,
+            "active_count": job.in_progress_count,
             "next": next_url,
             "cancel_url": next_url or job_detail,
             "active_nav": "jobs",

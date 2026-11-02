@@ -27,7 +27,7 @@ Durable decisions that apply across all phases.
   | `/accounts/login/`, `/accounts/logout/` | Django auth views |
   | `/admin/` | Django admin (administrators only) |
   | `/` | Pipeline workspace: first open job by title, or the empty state |
-  | `/pipeline/jobs/<job_pk>/` | Workspace for one job. Query string: `tab=active\|finished\|all`, `q=` |
+  | `/pipeline/jobs/<job_pk>/` | Workspace for one job. Query string: `jobs=open\|closed\|all` (sidebar filter, from Phase 7), `tab=active\|finished\|all`, `q=` |
   | `/pipeline/applications/<pk>/` | One application. A basic full page in Phase 6, then the workspace with it selected (job derived from it, same query string). Full page normally, detail partial for HTMX |
   | `/pipeline/applications/<pk>/move/` | POST a stage move or reopen (target stage, optional reason) |
   | `/pipeline/applications/<pk>/details/` | POST applied-on date and notes |
@@ -344,18 +344,26 @@ The selected job gets the second entry point, `/pipeline/jobs/<job_pk>/applicati
 Counts become real everywhere: sidebar in-progress counts, the jobs list's active-applications column, the candidates list's applications column, and the close-job page's active count.
 
 Empty states:
-- With no open jobs, the workspace shows a clear message and a link to create a job, while closed jobs stay reachable in the sidebar.
+- With no open jobs, the workspace shows a clear message and a link to create a job, plus a "Show closed jobs" link that switches the sidebar filter to Closed.
 - A job with no applications says so and offers the add-application action when the job is open.
+
+**Sidebar filter (approved addition during this phase, 2026-11-01):**
+- Open, Closed and All links at the top of the sidebar, kept in the URL as `jobs=open|closed|all`.
+- With no valid `jobs` value, `/` defaults to Open, and a job or application URL defaults to that job's status.
+- Sidebar job links and application-selection links always carry the current `jobs` value explicitly.
+- Changing the filter never changes the displayed job or application. The filter links target the current job or application URL, including on `/`. If the filter hides the selected job, the sidebar shows a short explanation.
+- Alphabetical order and in-progress counts are unchanged. All navigation is normal GET.
 
 ### Acceptance criteria
 
-- [ ] `/` opens the first open job by title, or the no-open-jobs empty state with a create-job link.
-- [ ] The sidebar lists open and closed jobs with in-progress counts, and closed jobs are reachable.
-- [ ] `/pipeline/applications/<pk>/` renders the full workspace with that job, the application highlighted, and its detail panel with the progress indicator and history.
-- [ ] The job-side picker lists only candidates without an application for that job, and isn't available on a closed job.
-- [ ] After recording from either entry point, the workspace opens with the new application selected.
-- [ ] Candidate detail links open the workspace with that application selected.
-- [ ] The jobs list, candidates list and close-job page show real counts.
+- [x] `/` opens the first open job by title, or the no-open-jobs empty state with a create-job link and a Show closed jobs link.
+- [x] The sidebar lists open and closed jobs with in-progress counts, and closed jobs are reachable.
+- [x] The sidebar filter defaults to Open on `/` and to the job's status on a job or application URL, is carried in sidebar and application links, falls back to the default for unknown values, never changes the displayed job or application, and explains when it hides the selected job.
+- [x] `/pipeline/applications/<pk>/` renders the full workspace with that job, the application highlighted, and its detail panel with the progress indicator and history.
+- [x] The job-side picker lists only candidates without an application for that job, and isn't available on a closed job.
+- [x] After recording from either entry point, the workspace opens with the new application selected.
+- [x] Candidate detail links open the workspace with that application selected.
+- [x] The jobs list, candidates list and close-job page show real counts.
 
 ### Possible TDD candidates (not approved)
 
@@ -368,7 +376,8 @@ Empty states:
 - From the workspace's selected job, add an application and confirm you land with it selected, and that the candidate disappears from that job's picker.
 - From a candidate page, follow an application link and confirm the workspace opens with it highlighted and its details shown.
 - Check the counts in the sidebar, jobs list, candidates list and close-job page against the data.
-- Close every job and confirm the empty state and create-job link, with closed jobs still in the sidebar.
+- Close every job and confirm the empty state, the create-job link, and that Show closed jobs lists the closed jobs.
+- Switch the sidebar filter between Open, Closed and All on `/`, on a job and on an application, and confirm the displayed job and application never change, the filter stays in the URL when selecting jobs and applications, and the hidden-job note appears when the filter hides the selected job.
 - Narrow the window and confirm the columns stack.
 
 **Wrap-up:** steps 7–12.
@@ -482,7 +491,7 @@ The panel shows a Reopen primary action with its target and a no-skip alert on r
 
 The application list groups the selected job's applications by stage in pipeline order, with the most recent stage change first within each group. Active (default), Finished and All tabs show counts that reflect the job and search before the tab is applied. A name-or-email search submits with a button or Enter.
 
-The tab and search live in the URL (`?tab=&q=`). Application selection, stage moves and close/reopen returns keep them. Switching jobs resets them. Navigation is still full-page in this phase.
+The tab and search live in the URL (`?tab=&q=`). Application selection, stage moves and close/reopen returns keep them. Switching jobs resets them, but keeps the Phase 7 sidebar filter (`jobs=`). Navigation is still full-page in this phase.
 
 ### Acceptance criteria
 

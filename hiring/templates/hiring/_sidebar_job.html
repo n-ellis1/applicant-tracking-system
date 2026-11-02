@@ -1,0 +1,6 @@
+<li>
+  <a href="{% url 'hiring:pipeline_job' sidebar_job.pk %}?jobs={{ jobs_filter }}"{% if sidebar_job == job %} aria-current="page" class="menu-active"{% endif %}>
+    <span class="min-w-0 grow break-words">{{ sidebar_job.title }}</span>
+    <span class="badge badge-sm badge-neutral shrink-0">{{ sidebar_job.in_progress_count }}<span class="sr-only"> in progress</span></span>
+  </a>
+</li>

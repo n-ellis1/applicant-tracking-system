@@ -51,8 +51,7 @@
                     <span class="badge {% if job.status == 'open' %}badge-success{% else %}badge-neutral{% endif %}">{{ job.get_status_display }}</span>
                   </td>
                   <td>{{ job.closed_at|date:"M j, Y"|default:"—" }}</td>
-                  {# Applications arrive in a later phase. #}
-                  <td class="text-right">0</td>
+                  <td class="text-right">{{ job.in_progress_count }}</td>
                 </tr>
               {% endfor %}
             </tbody>

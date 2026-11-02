@@ -5,7 +5,7 @@ from django.db.models import ProtectedError
 from django.db.models.functions import Lower
 from django.utils import timezone
 
-from .stages import Stage
+from .stages import ACTIVE_STAGES, Stage
 
 
 def refuse_if_used(jobs):
@@ -46,6 +46,21 @@ class Skill(models.Model):
         return super().delete(*args, **kwargs)
 
 
+class JobOpeningQuerySet(models.QuerySet):
+    def with_in_progress_count(self):
+        # In progress means an active stage; finished applications don't count.
+        jobs = self.annotate(
+            in_progress_count=models.Count(
+                "applications",
+                filter=models.Q(applications__stage__in=ACTIVE_STAGES),
+            )
+        )
+        # Django drops Meta.ordering from GROUP BY queries, so keep it here.
+        if not self.query.order_by:
+            jobs = jobs.order_by(*self.model._meta.ordering)
+        return jobs
+
+
 class JobOpening(models.Model):
     class EmploymentType(models.TextChoices):
         FULL_TIME = "full_time", "Full-time"
@@ -67,6 +82,8 @@ class JobOpening(models.Model):
     skills = models.ManyToManyField(Skill, blank=True, related_name="jobs")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = JobOpeningQuerySet.as_manager()
 
     class Meta:
         ordering = [Lower("title"), "pk"]
