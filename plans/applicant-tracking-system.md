@@ -454,16 +454,16 @@ The panel shows a Reopen primary action with its target and a no-skip alert on r
 
 ### Acceptance criteria
 
-- [ ] Reopening Withdrawn moves the same application to Applied from any prior stage, with no new application.
-- [ ] After a Withdrawn reopen, Applied → Interview is blocked, Applied → Screening is allowed, Offer → Hired is allowed, backward moves are allowed, and Rejected/Withdrawn from any active stage are allowed.
-- [ ] A restricted application that's Rejected and reopened still can't skip. One that's Hired and reopened to Offer is still restricted. One that withdraws and reopens again returns to Applied and stays restricted.
-- [ ] An application never reopened from Withdrawn reopens from Hired/Rejected only to its previous stage and may skip forward afterward.
-- [ ] Tests run repeated reopen and withdraw sequences and check both history-derived facts after every step.
-- [ ] Reopening a finished application on a closed job is blocked.
-- [ ] Reopening a job clears `closed_at`, re-enables active applications, and leaves finished ones unchanged.
-- [ ] Close job and Reopen job in the workspace header return to the same application, tab and search.
-- [ ] The no-skip alert shows on restricted applications.
-- [ ] Every one of R-1 to R-15 now has at least one automated test.
+- [x] Reopening Withdrawn moves the same application to Applied from any prior stage, with no new application.
+- [x] After a Withdrawn reopen, Applied → Interview is blocked, Applied → Screening is allowed, Offer → Hired is allowed, backward moves are allowed, and Rejected/Withdrawn from any active stage are allowed.
+- [x] A restricted application that's Rejected and reopened still can't skip. One that's Hired and reopened to Offer is still restricted. One that withdraws and reopens again returns to Applied and stays restricted.
+- [x] An application never reopened from Withdrawn reopens from Hired/Rejected only to its previous stage and may skip forward afterward.
+- [x] Tests run repeated reopen and withdraw sequences and check both history-derived facts after every step.
+- [x] Reopening a finished application on a closed job is blocked.
+- [x] Reopening a job clears `closed_at`, re-enables active applications, and leaves finished ones unchanged.
+- [x] Close job and Reopen job in the workspace header return to the same application, tab and search.
+- [x] The no-skip alert shows on restricted applications.
+- [x] Every one of R-1 to R-15 now has at least one automated test.
 
 ### Possible TDD candidates (not approved)
 

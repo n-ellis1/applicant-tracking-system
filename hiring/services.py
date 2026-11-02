@@ -1,5 +1,7 @@
 """Data-changing hiring operations, shared by app views and admin."""
 
+from typing import NamedTuple
+
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
@@ -53,6 +55,32 @@ def create_application(*, candidate, job, applied_on, changed_by):
     return application
 
 
+class StageFacts(NamedTuple):
+    """Facts the stage rules need, derived from history and never stored."""
+
+    stage_before_outcome: str | None = None
+    reopened_from_withdrawn: bool = False
+
+
+def stage_facts(stage, history):
+    """The rule facts for an application at stage, given its history entries
+    oldest first."""
+    before = None
+    # The entry that moved the application into Hired or Rejected is its
+    # latest one. If history doesn't agree with the stage, leave it unknown.
+    if stage in (Stage.HIRED, Stage.REJECTED) and history:
+        latest = history[-1]
+        if latest.new_stage == stage:
+            before = latest.old_stage
+    # Nothing leaves Withdrawn except a reopen to Applied, so one such entry
+    # means the application was reopened from Withdrawn, permanently.
+    reopened = any(
+        entry.old_stage == Stage.WITHDRAWN and entry.new_stage == Stage.APPLIED
+        for entry in history
+    )
+    return StageFacts(stage_before_outcome=before, reopened_from_withdrawn=reopened)
+
+
 def move_application(application, target, *, changed_by, reason=""):
     """Move an application to target and record the move in its history.
 
@@ -63,10 +91,12 @@ def move_application(application, target, *, changed_by, reason=""):
     with transaction.atomic():
         # Check against the database: the caller's page may be stale.
         current = Application.objects.select_related("job").get(pk=application.pk)
+        facts = stage_facts(current.stage, list(current.history.all()))
         check = check_move(
             current.stage,
             target,
             job_open=current.job.status == JobOpening.Status.OPEN,
+            **facts._asdict(),
         )
         if not check.allowed:
             raise ValidationError(check.reason, code="blocked_move")

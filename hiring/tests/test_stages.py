@@ -75,21 +75,6 @@ def test_moving_to_the_current_stage_is_blocked(stage):
     )
 
 
-# Reopening a finished application comes in Phase 9; until then it's blocked.
-FINAL_TO_ACTIVE = [
-    (current, target) for current in FINAL_STAGES for target in ACTIVE_STAGES
-]
-
-
-@pytest.mark.parametrize(
-    ("current", "target"), FINAL_TO_ACTIVE, ids=_ids(FINAL_TO_ACTIVE)
-)
-def test_moves_from_final_to_active_stages_are_blocked(current, target):
-    assert check_move(current, target, job_open=True) == MoveCheck(
-        False, "This application is finished. Reopen it before moving it."
-    )
-
-
 @pytest.mark.parametrize(
     ("current", "target"),
     [("bogus", Stage.APPLIED), (Stage.APPLIED, "bogus"), (Stage.APPLIED, "")],
@@ -121,6 +106,170 @@ def test_closed_job_blocks_every_other_move_from_active_stages(current, target):
         False,
         "This job is closed, so its applications can only be rejected "
         "or marked withdrawn.",
+    )
+
+
+# R-6 and R-10: Hired and Rejected reopen only to the stage before that outcome,
+# and only on an open job. Missing or invalid history blocks the reopen.
+REOPEN_CLOSED_JOB_REASON = (
+    "This job is closed. Reopen the job before reopening this application."
+)
+
+
+def _reopen_cases():
+    cases = []
+    for current in (Stage.HIRED, Stage.REJECTED):
+        for before in ACTIVE_STAGES:
+            wrong_target = MoveCheck(
+                False,
+                f"A {current.label} application reopens only to {before.label}, "
+                "the stage it was in before that outcome.",
+            )
+            for target in ACTIVE_STAGES:
+                for job_open in (True, False):
+                    if target != before:
+                        expected = wrong_target
+                    elif job_open:
+                        expected = MoveCheck(True)
+                    else:
+                        expected = MoveCheck(False, REOPEN_CLOSED_JOB_REASON)
+                    cases.append(
+                        pytest.param(
+                            current,
+                            before,
+                            target,
+                            job_open,
+                            expected,
+                            id=f"{current.label} (from {before.label}) -> "
+                            f"{target.label}, job {'open' if job_open else 'closed'}",
+                        )
+                    )
+        for before in (None, "", "bogus", Stage.WITHDRAWN, Stage.HIRED, Stage.REJECTED):
+            cases.append(
+                pytest.param(
+                    current,
+                    before,
+                    Stage.APPLIED,
+                    True,
+                    MoveCheck(
+                        False,
+                        "The stage history doesn't show which stage came before "
+                        f"{current.label}, so this application can't be reopened.",
+                    ),
+                    id=f"{current.label} (from {before!r}) -> Applied, missing history",
+                )
+            )
+    return cases
+
+
+@pytest.mark.parametrize(
+    ("current", "before", "target", "job_open", "expected"), _reopen_cases()
+)
+def test_hired_and_rejected_reopen_only_to_the_previous_stage_on_an_open_job(
+    current, before, target, job_open, expected
+):
+    assert (
+        check_move(current, target, job_open=job_open, stage_before_outcome=before)
+        == expected
+    )
+
+
+# R-7, R-8 and R-9: Withdrawn reopens to Applied, and from then on the
+# application can never skip forward. Single steps (including Offer -> Hired),
+# backward moves and ending the application stay allowed.
+WITHDRAWN_REOPEN_REASON = (
+    "A Withdrawn application reopens only to Applied, so it repeats every stage."
+)
+FORWARD_PATH = (*ACTIVE_STAGES, Stage.HIRED)
+
+
+def _no_skip_reason(step):
+    return (
+        "This application was reopened after being withdrawn, so it can't skip "
+        f"stages. It can only move forward to {step.label}."
+    )
+
+
+def _withdrawn_cases():
+    cases = []
+    # Reopening Withdrawn, whether or not it was reopened from Withdrawn before.
+    for restricted in (False, True):
+        for target in ACTIVE_STAGES:
+            for job_open in (True, False):
+                if target != Stage.APPLIED:
+                    expected = MoveCheck(False, WITHDRAWN_REOPEN_REASON)
+                elif job_open:
+                    expected = MoveCheck(True)
+                else:
+                    expected = MoveCheck(False, REOPEN_CLOSED_JOB_REASON)
+                cases.append(
+                    pytest.param(
+                        Stage.WITHDRAWN,
+                        target,
+                        job_open,
+                        restricted,
+                        None,
+                        expected,
+                        id=f"Withdrawn -> {target.label}, "
+                        f"job {'open' if job_open else 'closed'}, "
+                        f"{'restricted' if restricted else 'unrestricted'}",
+                    )
+                )
+    # A restricted application's moves from every active stage on an open job.
+    for current in ACTIVE_STAGES:
+        for target in Stage:
+            if target == current:
+                continue
+            step = FORWARD_PATH[FORWARD_PATH.index(current) + 1]
+            is_skip = target in FORWARD_PATH and FORWARD_PATH.index(
+                target
+            ) > FORWARD_PATH.index(step)
+            expected = (
+                MoveCheck(False, _no_skip_reason(step)) if is_skip else MoveCheck(True)
+            )
+            cases.append(
+                pytest.param(
+                    current,
+                    target,
+                    True,
+                    True,
+                    None,
+                    expected,
+                    id=f"restricted {current.label} -> {target.label}",
+                )
+            )
+    # The restriction doesn't change where Hired and Rejected reopen to.
+    for current in (Stage.HIRED, Stage.REJECTED):
+        cases.append(
+            pytest.param(
+                current,
+                Stage.INTERVIEW,
+                True,
+                True,
+                Stage.INTERVIEW,
+                MoveCheck(True),
+                id=f"restricted {current.label} (from Interview) -> Interview",
+            )
+        )
+    return cases
+
+
+@pytest.mark.parametrize(
+    ("current", "target", "job_open", "restricted", "before", "expected"),
+    _withdrawn_cases(),
+)
+def test_withdrawn_reopens_to_applied_and_never_skips_forward_again(
+    current, target, job_open, restricted, before, expected
+):
+    assert (
+        check_move(
+            current,
+            target,
+            job_open=job_open,
+            stage_before_outcome=before,
+            reopened_from_withdrawn=restricted,
+        )
+        == expected
     )
 
 

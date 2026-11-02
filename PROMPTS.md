@@ -28,6 +28,187 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 9: Reopening finished applications and workspace job controls
+
+### Prompts
+
+1. **Start Phase 9 (`/implement`).**
+   > /implement @prd/applicant-tracking-system.md @plans/applicant-tracking-system.md implement Phase 9 only
+   >
+   > Read CLAUDE.md and follow the implement and tdd skills. Preserve the existing sidebar filter behavior.
+   >
+   > Propose the TDD candidates, explain them in beginner-friendly language, and wait for my approval before writing code.
+   >
+   > Implement the approved reopening rules:
+   > - Hired and Rejected reopen only to their previous active stage.
+   > - Withdrawn reopens to Applied and permanently prevents forward skips.
+   > - Derive those facts from stage history.
+   > - Reopening an application requires an open job.
+   > - Add the workspace job close/reopen controls described in the plan.
+   >
+   > Keep HTMX changes for later phases. After automated checks pass, give me browser verification steps and wait for my confirmation. Don't mark the phase complete, commit, push, or start Phase 10 yet.
+
+2. **Approve all three candidates, add regression tests, and block on missing history.**
+   > I approve all three candidates.
+   >
+   > Include ordinary regression tests showing that the no-skip restriction survives both Rejected/reopen and Hired/reopen, and that reopening Withdrawn reuses the same application record.
+   >
+   > Keep final-to-final moves blocked. If a Hired or Rejected application has missing or invalid previous-stage history, block reopening with a clear message rather than guessing.
+   >
+   > Start with candidate 1. Show me the test and RED result, then stop for approval before implementing it. Existing Phase 8 tests that intentionally blocked all reopening will need my approval before their expectations change.
+
+3. **Approve candidate 1's test, its messages, and narrowing the old test.**
+   > I approve candidate 1's test, the reason messages, and narrowing the old final-to-active test to Withdrawn only for now.
+   >
+   > Implement the Hired and Rejected reopening rules. Keep final-to-final moves blocked. Show me the GREEN results and full regression results, then stop before candidate 2.
+   >
+   > If other Phase 8 tests fail because their temporary reopening expectations changed, show me the proposed corrections before changing them.
+
+4. **Approve the previous-stage wiring, the Reopen action and three test corrections.**
+   > I approve connecting the previous-stage history fact to the service and panel, adding the Reopen primary action, and making the three test corrections as shown.
+   >
+   > Use one shared history-fact helper rather than duplicating the lookup in the service and panel.
+   >
+   > Don't promise candidate 3 will go RED after this wiring. Run it when we reach it and report honestly which behavior already passes and which is still missing.
+   >
+   > Show me the updated results and full regression results, then stop before candidate 2.
+
+5. **Start candidate 2.**
+   > Yes, proceed to candidate 2 for Withdrawn reopening and the permanent no-skip restriction. Show me the tests and actual RED results, then stop for approval before implementing the missing behavior.
+   >
+   > Keep the planned successful reopening tests through both the service and move view.
+
+6. **Approve candidate 2's test and deleting the superseded test.**
+   > I approve candidate 2's tests and reason messages, and deleting the superseded test_moves_from_withdrawn_to_active_stages_are_blocked.
+   >
+   > Implement the pure rules in stages.py. Keep final-to-final moves blocked and preserve the existing closed-job restrictions.
+   >
+   > Show me the GREEN results and full regression results, then stop before candidate 3's history-derived restriction work.
+
+7. **Start candidate 3 with the sequence test first.**
+   > Yes, proceed to candidate 3. Write and run the sequence test before adding the history-derived restriction.
+   >
+   > Check both history facts after each relevant move, repeated Withdrawn reopening, and the no-skip restriction surviving Rejected/reopen. Report honestly which parts already pass and where the test fails.
+   >
+   > Show me the test and actual result, then stop for approval before implementing the missing history fact.
+
+8. **Approve the sequence test and the Withdrawn-to-Applied fact.**
+   > I approve the sequence test and proposed implementation. Derive reopened_from_withdrawn from any Withdrawn-to-Applied history entry, and pass it through the shared facts helper to the service and panel rules.
+   >
+   > Show me the GREEN result and full regression results, then stop before the remaining Phase 9 work.
+
+9. **Continue with the rest of Phase 9.**
+   > Yes, continue with the remaining Phase 9 work and ordinary tests as listed.
+   >
+   > Preserve the selected application and jobs filter through job close/reopen controls. Keep the permanent no-skip restriction after later outcomes and reopening, and leave finished applications unchanged when reopening a job.
+   >
+   > Run all planned checks, then give me browser verification steps. Wait for my confirmation before marking Phase 9 complete, committing, pushing, or starting Phase 10.
+
+10. **Browser checks passed; mark complete and propose CLAUDE.md.**
+    > All Phase 9 manual checks passed: Hired/Rejected reopening targets, Withdrawn restarting at Applied, the permanent no-skip restriction through later outcomes and reopens, closed-job restrictions, workspace close/reopen controls preserving selection and jobs=, finished applications staying finished when a job reopens, landing-page return behavior, and narrow-screen dark layouts.
+    >
+    > Mark Phase 9 complete. Show me any proposed CLAUDE.md updates, limited to concise, durable conventions verified in this phase. Keep the file within our 70-80-line target; if nothing needs adding, say so.
+    >
+    > Don't commit or start Phase 10 yet.
+
+11. **Correction: approve CLAUDE.md with my wording for the facts line, and write this log.**
+    > I approve the diff with one wording adjustment:
+    >
+    > "For application operations and UI actions, derive rule facts through services.stage_facts() and pass them to check_move(). Pure rule tests may supply facts directly. Block reopening when history doesn't identify a valid target."
+    >
+    > Keep the layout and return_url changes as proposed.
+    >
+    > Apply the updates, then write this session log to PROMPTS.md according to its instructions. Include the three RED-to-GREEN candidates, approved changes to Phase 8 tests, ordinary regression tests, and browser verification.
+    >
+    > Show me the changed-file summary and proposed commit message before committing. Don't start Phase 10.
+
+### Summary
+
+- **Outcome:**
+  - **Stage rules (`hiring/stages.py`):** `check_move(current, target, *, job_open, stage_before_outcome=None, reopened_from_withdrawn=False)`. It checks in this order:
+    - same stage (unchanged)
+    - final to final, still blocked first (unchanged)
+    - reopening, through `_check_reopen()`:
+      - Withdrawn to anything but Applied: "A Withdrawn application reopens only to Applied, so it repeats every stage."
+      - Hired or Rejected with a previous stage that isn't an active stage (missing, blank, unknown or final): "The stage history doesn't show which stage came before {Outcome}, so this application can't be reopened." The rules never guess a target.
+      - Hired or Rejected to anything but the previous stage: "A {Outcome} application reopens only to {Stage}, the stage it was in before that outcome."
+      - the right target on a closed job: "This job is closed. Reopen the job before reopening this application."
+    - the closed-job rule for active applications (unchanged)
+    - no-skip: when `reopened_from_withdrawn`, a forward target beyond the next stage gets "This application was reopened after being withdrawn, so it can't skip stages. It can only move forward to {Stage}."
+    - otherwise allowed
+
+    Phase 8's placeholder "This application is finished. Reopen it before moving it." is gone.
+  - **Shared history facts (`hiring/services.py`):** `stage_facts(stage, history)` returns `StageFacts(stage_before_outcome, reopened_from_withdrawn)`.
+    - The previous stage is the old stage on the latest history entry, and only when that entry moved the application into its current Hired or Rejected stage. Otherwise it's unknown.
+    - `reopened_from_withdrawn` is true when any entry goes from Withdrawn to Applied.
+    - Nothing new is stored on the application. `move_application` reads the history inside its transaction and passes the facts to `check_move()`. The panel uses the same helper with the history the page already loads.
+  - **Panel:**
+    - a **Reopen to {Stage}** primary action, which is a finished application's single allowed target
+    - an info alert on any application ever reopened from Withdrawn: "This application was reopened after being withdrawn, so it can't skip stages…". It stays after later outcomes.
+    - for a restricted application, skip targets appear under Blocked moves with the no-skip reason instead of as buttons
+  - **Workspace header:** an open job shows **Close job**, linking to the existing confirmation page. A closed job shows **Reopen job** as a POST form. Both carry a `return_url` as `next`: the displayed application or job URL plus its current `jobs=` value.
+    - On `/`, they return to the landing job's own URL, so closing it doesn't switch to a different job.
+    - After a failed move, they still return to the application rather than the `/move/` URL.
+    - The sidebar filter's behavior is unchanged.
+  - **TDD, three candidates (all RED-to-GREEN):**
+    1. **Hired and Rejected reopen only to the previous stage, on an open job** (`test_stages.py`): 112 parametrized cases, covering both outcomes × every previous stage × every active target × open or closed job, plus 12 missing or invalid previous-stage cases. The only scaffolding was the ignored `stage_before_outcome` keyword. **RED** with 112 assertion failures: 100 cases got the old finished-application message, and the 12 missing-history cases got the same generic message instead of the new one. `_check_reopen()` made it **GREEN**.
+    2. **Withdrawn reopens to Applied and never skips forward again** (`test_stages.py`): 57 cases. 20 Withdrawn reopen cases (every active target, open or closed job, restricted or not), 35 moves for a restricted application from every active stage on an open job, and 2 restricted Hired and Rejected reopens. The only scaffolding was the ignored `reopened_from_withdrawn` keyword. **RED** with 30 assertion failures: all 20 Withdrawn reopens got the old message, and 10 forward skips were allowed. **27 cases already passed and were reported as such:** 25 single steps, backward moves and endings that were always allowed, and the 2 restricted reopens. The Withdrawn branch and the no-skip check made it **GREEN**.
+    3. **History facts across repeated reopen and withdraw** (`test_moves.py`): one application through the service, from Applied to Interview, Withdrawn, a reopen to Applied, a refused skip, Screening, Rejected, a reopen to Screening, a refused skip, Withdrawn, a reopen to Applied and a refused skip. After every step it checks both facts and that the stage matches history. **RED** at the very first check with `{'stage_before_outcome': None} == {..., 'reopened_from_withdrawn': False}`. Since the test stops at its first failure, a throwaway scratchpad probe walked the same start. It showed that the previous-stage fact and the Withdrawn reopen already worked, and that a skip after the reopen was **wrongly allowed**. Adding `reopened_from_withdrawn` to `stage_facts()` made it **GREEN**.
+  - **Approved changes to Phase 8 tests:**
+    - `test_moves_from_final_to_active_stages_are_blocked` was narrowed to Withdrawn only and renamed for candidate 1, then **deleted** for candidate 2. The new tests cover every case it had.
+    - After candidate 1, three tests failed. The service didn't pass the previous stage yet, so they got the "history doesn't show" message:
+      - `test_stale_move_is_refused_and_changes_nothing`
+      - `test_stale_move_view_shows_the_error_and_refreshed_actions`
+      - `test_panel_for_a_finished_application_explains_every_blocked_move`
+
+      With my approval, the previous-stage fact was wired into the service and panel and the Reopen action was added. The three tests now expect "A Rejected application reopens only to Applied…", a single `applied` button with "Reopen to Applied", and wrong-target reasons for Screening through Offer.
+  - **Ordinary tests** (all passed on first run): 18 test functions (27 cases).
+    - in `test_moves.py`:
+      - Hired and Rejected reopen to the previous stage and can skip afterward
+      - Withdrawn reopens from every active stage to Applied on the same application record
+      - the restriction survives a Rejected reopen, and a Hired reopen to Offer, with Offer → Hired allowed on the way
+      - reopening is blocked on a closed job for all three outcomes, and blocked when the previous-stage history is missing; neither changes anything
+      - successful reopens through the move view, including Withdrawn keeping the same record
+      - the panel: Reopen to Applied for Withdrawn, the closed-job reopen reason, the alert with single-step buttons and no-skip blocked reasons, the alert after a later outcome, and no alert on a normal application
+      - reopening a job clears `closed_at`, leaves Hired, Rejected and Withdrawn applications and their history unchanged, and lets an active application move again
+    - in `test_pipeline.py`:
+      - a close-confirm-close-reopen round trip from the header, returning to the same application with `jobs=all`
+      - the Close job `next` for the landing page, a job and an application
+      - the header's `next` after a failed move
+      - header reopen leaving a Rejected application finished, with Reopen offered again
+  - **Rule coverage:** every rule R-1 to R-15 has at least one automated test. R-1, R-12 (new applications), R-14 and R-15 are covered by Phase 6 and 7 tests. The rest are in `test_stages.py` and `test_moves.py`.
+  - **Test totals:** 349 before Phase 9, 531 after. That's +112 (candidate 1), −10 (narrowing), +57 (candidate 2), −5 (deleting the superseded test), +1 (candidate 3) and +27 (ordinary).
+  - **Automated checks:** 531 passed. `ruff check`, `ruff format --check` and `makemigrations --check` were clean. No migration was needed.
+  - **Browser checks (by me):** all passed. They covered:
+    - Hired and Rejected reopening targets
+    - Withdrawn restarting at Applied
+    - the permanent no-skip restriction through later outcomes and reopens
+    - closed-job restrictions
+    - header close and reopen keeping the selection and `jobs=`
+    - finished applications staying finished when a job reopens
+    - the landing-page return
+    - the dark narrow-screen layouts
+  - **Docs:**
+    - All ten Phase 9 acceptance criteria are ticked in the plan.
+    - CLAUDE.md's `stages.py` and `services.py` layout lines mention the history-fact keywords and `stage_facts()`.
+    - Conventions gained my wording for deriving rule facts through `stage_facts()`, and the `return_url` line for close and reopen controls.
+- **Deviations:**
+  - **Extra regression tests:** I required ordinary tests for the restriction surviving both a Rejected reopen and a Hired reopen, and for Withdrawn reusing the same record.
+  - **Missing history:** I required a clear block instead of a guessed target when previous-stage history is missing or invalid. That added 12 cases to candidate 1.
+  - **Phase 8 test changes:** I required approval before any Phase 8 expectation changed, then approved the narrowing, the three corrections and the deletion separately.
+  - **Earlier wiring:** the agent had placed the service and panel wiring under candidate 3. I approved wiring the previous-stage fact right after candidate 1, so the three failing tests could be corrected against real behavior, and required one shared helper rather than two lookups.
+  - **No forced RED:** I told the agent not to promise candidate 3 would go RED after that wiring, and to report honestly what already passed.
+  - **CLAUDE.md wording:** I replaced the agent's facts convention with my own, which allows pure rule tests to supply facts directly.
+- **Sideways:**
+  - **Candidate 1 broke three Phase 8 tests:** the pure rule was right, but the service still passed no previous stage. Every real Hired or Rejected application showed the "history doesn't show" message until the approved wiring. The agent reported this rather than adjusting the tests.
+  - **Early passes in candidate 2:** 27 of 57 cases passed before the implementation, as described above.
+  - **Probe outside the test:** candidate 3's test stopped at its first check, so the agent used a throwaway scratchpad probe to see which later steps worked, rather than reordering or splitting the approved test.
+  - **Ordinary tests not run RED:** they were written after the code, so they weren't seen failing first.
+  - **Formatter:** `ruff format` re-wrapped one `is_skip` expression in candidate 2's test. Nothing it asserts changed.
+  - **Tool timeout:** one combined test and lint run passed the shell's 120-second limit and finished in the background. Later full-suite runs used a longer timeout.
+  - **Outdated comment still left:** `add_application` in `test_pipeline.py` still says "Moving applications arrives in Phase 8".
+  - **Skill lookup:** `/implement` isn't a registered skill in this session, so the agent read `.claude/skills/implement/SKILL.md` directly.
+
 ## 2026-11-01 — Phase 8: Moving applications
 
 ### Prompts

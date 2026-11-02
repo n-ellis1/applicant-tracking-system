@@ -47,12 +47,13 @@ def _progress_steps(application, history):
     return [*steps, last]
 
 
-def _stage_actions(application):
+def _stage_actions(application, facts):
     """The panel's moves, sorted by the stage rules into actions and reasons."""
     job_open = application.job.status == JobOpening.Status.OPEN
     step = next_stage(application.stage)
     actions = {
         "advance": None,
+        "reopen": None,
         "end_moves": [],
         "other_moves": [],
         "blocked_moves": [],
@@ -60,7 +61,9 @@ def _stage_actions(application):
     for target in Stage:
         if target == application.stage:
             continue
-        check = check_move(application.stage, target, job_open=job_open)
+        check = check_move(
+            application.stage, target, job_open=job_open, **facts._asdict()
+        )
         if not check.allowed:
             actions["blocked_moves"].append({"stage": target, "reason": check.reason})
         elif target in services.REASON_STAGES:
@@ -68,6 +71,9 @@ def _stage_actions(application):
             actions["end_moves"].append(target)
         elif target == step:
             actions["advance"] = target
+        elif application.stage in FINAL_STAGES:
+            # The rules allow a finished application exactly one reopen target.
+            actions["reopen"] = target
         else:
             actions["other_moves"].append(target)
     return actions
@@ -108,6 +114,9 @@ def _workspace(request, job, selected=None, move_form=None):
         # The filter never changes the displayed job, but it can hide its link.
         "job_hidden": job is not None and jobs_filter not in ("all", job.status),
         "selected": selected,
+        # Close and reopen return here: the displayed job or application with
+        # the current sidebar filter. Never the move URL a failed move renders.
+        "return_url": f"{filter_base}?{urlencode({'jobs': jobs_filter})}",
         "active_nav": "pipeline",
     }
     if job is not None:
@@ -119,7 +128,9 @@ def _workspace(request, job, selected=None, move_form=None):
         history = list(selected.history.select_related("changed_by"))
         context["history"] = history
         context["progress"] = _progress_steps(selected, history)
-        context["actions"] = _stage_actions(selected)
+        facts = services.stage_facts(selected.stage, history)
+        context["facts"] = facts
+        context["actions"] = _stage_actions(selected, facts)
         if move_form is not None:
             context["move_errors"] = [
                 message

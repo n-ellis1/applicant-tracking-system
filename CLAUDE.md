@@ -29,8 +29,8 @@ Internal Django applicant tracking system where hiring staff track candidates, j
 ## Project layout
 - `config/`: settings and root URLs (`/admin/`, `/accounts/` auth views, then `hiring.urls`).
 - `hiring/`: the only app. URL namespace `hiring`; templates in `hiring/templates/hiring/`; tests in `hiring/tests/test_*.py`, with shared fixtures in `hiring/tests/conftest.py` and data builders in `hiring/tests/helpers.py`.
-- `hiring/stages.py`: the stage list, the active and final groups, and `check_move()`, which returns a `MoveCheck(allowed, reason)`. No database access.
-- `hiring/services.py`: application creation, stage moves (`move_application`) and job close/reopen operations. Views use these shared operations.
+- `hiring/stages.py`: the stage list, the active and final groups, and `check_move()`, which takes the history facts as keywords and returns a `MoveCheck(allowed, reason)`. No database access.
+- `hiring/services.py`: application creation, stage moves (`move_application`), job close/reopen operations, and `stage_facts()`, which derives the rule facts from history. Views use these shared operations.
 - `hiring/templates/hiring/pipeline.html`: the pipeline workspace (jobs sidebar, application list, detail panel), with partials `_sidebar_job.html` and `_application_panel.html`. One `_workspace` view helper renders it for `/`, job URLs and application URLs.
 - `templates/`: `base.html`, nav partials `_nav.html` / `_nav_links.html`, `registration/login.html`.
 - `assets/css/source.css`: Tailwind + DaisyUI source. It scans the template folders and `hiring/forms.py` (for widget classes). Builds to `static/css/tailwind.css` (gitignored).
@@ -56,6 +56,8 @@ Internal Django applicant tracking system where hiring staff track candidates, j
 - Workspace pages take the displayed job and application from the URL path, never from the sidebar filter. Every sidebar job link, application link and filter link carries `jobs=open|closed|all` explicitly.
 - Workspace POST forms preserve a valid `jobs` filter through their action URLs and redirects.
 - Allowed and blocked moves and their explanations come from `check_move()`; templates don't decide transition rules.
+- For application operations and UI actions, derive rule facts through `services.stage_facts()` and pass them to `check_move()`. Pure rule tests may supply facts directly. Block reopening when history doesn't identify a valid target.
+- Workspace close/reopen controls pass the view's `return_url` (displayed job or application plus `jobs`) as `next`, never the request path, which can be the move URL after a failed move.
 - Never edit or regenerate a migration that has been applied or committed; add a new migration.
 - List pages read search and filter from GET, show 25 per page, and fall back to the default filter for unknown values. Page links carry the cleaned search and filter values.
 - Tests use pytest functions with pytest-django's `client` and `db` fixtures, not `TestCase` classes.

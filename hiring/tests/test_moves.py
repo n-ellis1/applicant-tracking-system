@@ -64,7 +64,8 @@ def test_stale_move_is_refused_and_changes_nothing(application, mover):
         services.move_application(stale, Stage.SCREENING, changed_by=mover)
 
     assert caught.value.messages == [
-        "This application is finished. Reopen it before moving it."
+        "A Rejected application reopens only to Applied, "
+        "the stage it was in before that outcome."
     ]
     assert Application.objects.get(pk=application.pk).stage == Stage.REJECTED
     assert list(application.history.values_list("pk", "new_stage")) == (history_before)
@@ -253,6 +254,65 @@ def test_stage_always_equals_the_latest_history_entry(application, mover):
     assert len(history(application)) == 4  # the refused move wrote nothing
 
 
+# Facts derived from history across reopen and withdraw sequences
+
+
+def no_skip_reason(step):
+    return (
+        "This application was reopened after being withdrawn, so it can't skip "
+        f"stages. It can only move forward to {step.label}."
+    )
+
+
+def test_history_facts_stay_correct_through_repeated_reopen_and_withdraw(
+    application, mover
+):
+    def expect(stage, before, restricted):
+        current = Application.objects.get(pk=application.pk)
+        assert current.stage == stage
+        facts = services.stage_facts(current.stage, list(current.history.all()))
+        assert facts._asdict() == {
+            "stage_before_outcome": before,
+            "reopened_from_withdrawn": restricted,
+        }
+        assert_stage_matches_history()
+
+    def refused_skip(target, step):
+        before = history(application)
+        with pytest.raises(ValidationError) as caught:
+            move(application, target, mover)
+        assert caught.value.messages == [no_skip_reason(step)]
+        assert history(application) == before
+
+    expect(Stage.APPLIED, None, False)
+    move(application, Stage.INTERVIEW, mover)  # unrestricted, so a skip is fine
+    expect(Stage.INTERVIEW, None, False)
+    move(application, Stage.WITHDRAWN, mover)
+    expect(Stage.WITHDRAWN, None, False)
+
+    move(application, Stage.APPLIED, mover)  # reopen from Withdrawn
+    expect(Stage.APPLIED, None, True)
+    refused_skip(Stage.INTERVIEW, step=Stage.SCREENING)
+    move(application, Stage.SCREENING, mover)
+    expect(Stage.SCREENING, None, True)
+
+    move(application, Stage.REJECTED, mover)
+    expect(Stage.REJECTED, Stage.SCREENING, True)
+    move(application, Stage.SCREENING, mover)  # reopen from Rejected
+    expect(Stage.SCREENING, None, True)
+    refused_skip(Stage.FINAL_REVIEW, step=Stage.INTERVIEW)
+
+    move(application, Stage.WITHDRAWN, mover)
+    expect(Stage.WITHDRAWN, None, True)
+    move(application, Stage.APPLIED, mover)  # reopen from Withdrawn again
+    expect(Stage.APPLIED, None, True)
+    refused_skip(Stage.INTERVIEW, step=Stage.SCREENING)
+
+    # One application record throughout: the initial entry plus eight moves.
+    assert Application.objects.count() == 1
+    assert len(history(application)) == 9
+
+
 # The move view
 
 
@@ -334,10 +394,13 @@ def test_stale_move_view_shows_the_error_and_refreshed_actions(
     assert response.status_code == 200
     page = page_text(response)
     assert "That move wasn't made." in page
-    assert "This application is finished. Reopen it before moving it." in page
-    # The actions now match Rejected: nothing to advance, reject or withdraw.
-    assert stage_buttons(page) == []
-    assert "No stage moves are available." in page
+    assert (
+        "A Rejected application reopens only to Applied, "
+        "the stage it was in before that outcome." in page
+    )
+    # The actions now match Rejected: only the reopen remains.
+    assert stage_buttons(page) == ["applied"]
+    assert "Reopen to Applied" in page
     assert Application.objects.get(pk=application.pk).stage == Stage.REJECTED
     assert history(application) == before
 
@@ -425,13 +488,16 @@ def test_panel_for_a_finished_application_explains_every_blocked_move(
 
     page = page_text(employee_client.get(detail_url(application)))
 
-    assert stage_buttons(page) == []
-    assert "No stage moves are available." in page
-    reopen = "This application is finished. Reopen it before moving it."
+    assert stage_buttons(page) == ["applied"]
+    assert "Reopen to Applied" in page
+    wrong = (
+        "A Rejected application reopens only to Applied, "
+        "the stage it was in before that outcome."
+    )
     assert blocked_moves(page) == [
         *(
-            f"{label}: {reopen}"
-            for label in ["Applied", "Screening", "Interview", "Final Review", "Offer"]
+            f"{label}: {wrong}"
+            for label in ["Screening", "Interview", "Final Review", "Offer"]
         ),
         f"Hired: {FINAL_TO_FINAL_REASON}",
         f"Withdrawn: {FINAL_TO_FINAL_REASON}",
@@ -445,3 +511,268 @@ def test_panel_move_forms_keep_the_sidebar_filter(employee_client, application):
     moves = [action for action in actions if "/move/" in action]
     assert moves
     assert set(moves) == {move_url(application, jobs="all")}
+
+
+# Reopening finished applications
+
+REOPEN_CLOSED_JOB_REASON = (
+    "This job is closed. Reopen the job before reopening this application."
+)
+
+
+def walk(application, mover, *targets):
+    for target in targets:
+        move(application, target, mover)
+
+
+def facts(application):
+    current = Application.objects.get(pk=application.pk)
+    return services.stage_facts(current.stage, list(current.history.all()))
+
+
+@pytest.mark.parametrize("outcome", [Stage.HIRED, Stage.REJECTED])
+def test_hired_or_rejected_reopens_to_the_previous_stage_and_may_skip_afterward(
+    application, mover, outcome
+):
+    walk(application, mover, Stage.SCREENING, outcome)
+
+    move(application, Stage.SCREENING, mover)
+
+    assert Application.objects.get(pk=application.pk).stage == Stage.SCREENING
+    assert history(application)[-1] == (outcome, Stage.SCREENING, "")
+    assert not facts(application).reopened_from_withdrawn
+    move(application, Stage.OFFER, mover)  # never withdrawn, so skipping is fine
+    assert Application.objects.get(pk=application.pk).stage == Stage.OFFER
+
+
+@pytest.mark.parametrize("start", ACTIVE_STAGES)
+def test_reopening_withdrawn_returns_the_same_application_to_applied(
+    application, mover, start
+):
+    if start != Stage.APPLIED:
+        move(application, start, mover)
+    move(application, Stage.WITHDRAWN, mover)
+
+    move(application, Stage.APPLIED, mover)
+
+    assert Application.objects.count() == 1
+    reopened = Application.objects.get()
+    assert reopened.pk == application.pk
+    assert reopened.stage == Stage.APPLIED
+    assert history(application)[-1] == (Stage.WITHDRAWN, Stage.APPLIED, "")
+    assert_stage_matches_history()
+
+
+def test_restricted_application_stays_restricted_after_rejected_reopen(
+    application, mover
+):
+    walk(application, mover, Stage.WITHDRAWN, Stage.APPLIED, Stage.SCREENING)
+    walk(application, mover, Stage.REJECTED, Stage.SCREENING)  # reject, reopen
+    before = history(application)
+
+    with pytest.raises(ValidationError) as caught:
+        move(application, Stage.OFFER, mover)
+
+    assert caught.value.messages == [no_skip_reason(Stage.INTERVIEW)]
+    assert history(application) == before
+    assert facts(application).reopened_from_withdrawn
+
+
+def test_restricted_application_stays_restricted_after_hired_reopen_to_offer(
+    application, mover
+):
+    walk(application, mover, Stage.WITHDRAWN, Stage.APPLIED)
+    # One step at a time, including Offer -> Hired.
+    walk(
+        application,
+        mover,
+        Stage.SCREENING,
+        Stage.INTERVIEW,
+        Stage.FINAL_REVIEW,
+        Stage.OFFER,
+        Stage.HIRED,
+    )
+    move(application, Stage.OFFER, mover)  # reopen to the stage before Hired
+    assert Application.objects.get(pk=application.pk).stage == Stage.OFFER
+    move(application, Stage.SCREENING, mover)  # backward moves stay allowed
+    before = history(application)
+
+    with pytest.raises(ValidationError) as caught:
+        move(application, Stage.FINAL_REVIEW, mover)
+
+    assert caught.value.messages == [no_skip_reason(Stage.INTERVIEW)]
+    assert history(application) == before
+
+
+@pytest.mark.parametrize(
+    ("path", "reopen_to"),
+    [
+        ((Stage.OFFER, Stage.HIRED), Stage.OFFER),
+        ((Stage.INTERVIEW, Stage.REJECTED), Stage.INTERVIEW),
+        ((Stage.INTERVIEW, Stage.WITHDRAWN), Stage.APPLIED),
+    ],
+    ids=["Hired", "Rejected", "Withdrawn"],
+)
+def test_reopening_on_a_closed_job_is_blocked_and_changes_nothing(
+    application, mover, path, reopen_to
+):
+    walk(application, mover, *path)
+    close(application.job)
+    before = history(application)
+
+    with pytest.raises(ValidationError) as caught:
+        move(application, reopen_to, mover)
+
+    assert caught.value.messages == [REOPEN_CLOSED_JOB_REASON]
+    assert Application.objects.get(pk=application.pk).stage == path[-1]
+    assert history(application) == before
+
+
+def test_reopen_without_previous_stage_history_is_blocked(application, mover):
+    # Rejected with no history entry recording the move into it.
+    Application.objects.filter(pk=application.pk).update(stage=Stage.REJECTED)
+    before = history(application)
+
+    with pytest.raises(ValidationError) as caught:
+        move(application, Stage.APPLIED, mover)
+
+    assert caught.value.messages == [
+        "The stage history doesn't show which stage came before Rejected, "
+        "so this application can't be reopened."
+    ]
+    assert Application.objects.get(pk=application.pk).stage == Stage.REJECTED
+    assert history(application) == before
+
+
+def test_reopen_through_the_move_view_records_it_and_returns_to_the_workspace(
+    employee_client, employee, application, mover
+):
+    walk(application, mover, Stage.INTERVIEW, Stage.REJECTED)
+
+    response = employee_client.post(
+        move_url(application, jobs="all"), {"stage": Stage.INTERVIEW}
+    )
+
+    assert response.url == detail_url(application) + "?jobs=all"
+    assert Application.objects.get(pk=application.pk).stage == Stage.INTERVIEW
+    entry = application.history.last()
+    assert (entry.old_stage, entry.new_stage) == (Stage.REJECTED, Stage.INTERVIEW)
+    assert entry.changed_by == employee
+
+
+def test_withdrawn_reopen_through_the_move_view_keeps_the_same_application(
+    employee_client, application, mover
+):
+    move(application, Stage.WITHDRAWN, mover)
+
+    employee_client.post(move_url(application), {"stage": Stage.APPLIED})
+
+    assert Application.objects.count() == 1
+    assert Application.objects.get(pk=application.pk).stage == Stage.APPLIED
+
+
+# The panel for finished and restricted applications
+
+NO_SKIP_ALERT = "This application was reopened after being withdrawn"
+
+
+def test_panel_offers_reopen_to_applied_for_a_withdrawn_application(
+    employee_client, application, mover
+):
+    walk(application, mover, Stage.INTERVIEW, Stage.WITHDRAWN)
+
+    page = page_text(employee_client.get(detail_url(application)))
+
+    assert stage_buttons(page) == ["applied"]
+    assert "Reopen to Applied" in page
+    assert "Advance to" not in page
+    assert NO_SKIP_ALERT not in page  # not reopened yet
+
+
+def test_panel_on_a_closed_job_explains_why_reopen_is_blocked(
+    employee_client, application, mover
+):
+    walk(application, mover, Stage.INTERVIEW, Stage.REJECTED)
+    close(application.job)
+
+    page = page_text(employee_client.get(detail_url(application)))
+
+    assert stage_buttons(page) == []
+    assert "Reopen to" not in page
+    assert f"Interview: {REOPEN_CLOSED_JOB_REASON}" in blocked_moves(page)
+
+
+def test_panel_for_a_restricted_application_shows_the_alert_and_single_steps(
+    employee_client, application, mover
+):
+    walk(application, mover, Stage.WITHDRAWN, Stage.APPLIED, Stage.SCREENING)
+    walk(application, mover, Stage.INTERVIEW)
+
+    page = page_text(employee_client.get(detail_url(application)))
+
+    assert NO_SKIP_ALERT in page
+    assert "Advance to Final Review" in page
+    assert stage_buttons(page) == [
+        "final_review",  # advance, the only forward move
+        "rejected",
+        "withdrawn",
+        "applied",  # backward moves stay allowed
+        "screening",
+    ]
+    reason = no_skip_reason(Stage.FINAL_REVIEW)
+    assert blocked_moves(page) == [f"Offer: {reason}", f"Hired: {reason}"]
+
+
+def test_panel_keeps_the_alert_after_a_later_outcome(
+    employee_client, application, mover
+):
+    walk(application, mover, Stage.WITHDRAWN, Stage.APPLIED, Stage.REJECTED)
+
+    page = page_text(employee_client.get(detail_url(application)))
+
+    assert NO_SKIP_ALERT in page
+    assert "Reopen to Applied" in page
+
+
+def test_panel_for_an_unrestricted_application_has_no_alert(
+    employee_client, application
+):
+    page = page_text(employee_client.get(detail_url(application)))
+
+    assert NO_SKIP_ALERT not in page
+
+
+# Reopening a job
+
+
+def test_reopening_a_job_reenables_active_and_leaves_finished_applications(
+    application, mover
+):
+    job = application.job
+    others = {
+        stage: services.create_application(
+            candidate=make_candidate(email=f"{stage}@example.com"),
+            job=job,
+            applied_on=timezone.localdate(),
+            changed_by=mover,
+        )
+        for stage in (Stage.HIRED, Stage.REJECTED, Stage.WITHDRAWN)
+    }
+    for stage, other in others.items():
+        move(other, stage, mover)
+    move(application, Stage.INTERVIEW, mover)
+    services.close_job(JobOpening.objects.get(pk=job.pk))
+    with pytest.raises(ValidationError):
+        move(application, Stage.OFFER, mover)
+    histories = {stage: history(other) for stage, other in others.items()}
+
+    services.reopen_job(JobOpening.objects.get(pk=job.pk))
+
+    job.refresh_from_db()
+    assert job.status == JobOpening.Status.OPEN
+    assert job.closed_at is None
+    for stage, other in others.items():
+        assert Application.objects.get(pk=other.pk).stage == stage
+        assert history(other) == histories[stage]
+    move(application, Stage.OFFER, mover)  # active applications move again
+    assert Application.objects.get(pk=application.pk).stage == Stage.OFFER

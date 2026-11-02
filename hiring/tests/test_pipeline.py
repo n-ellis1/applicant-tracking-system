@@ -1,6 +1,8 @@
+import html
 import re
 from datetime import timedelta
 from itertools import count
+from urllib.parse import quote
 
 import pytest
 from django.contrib.auth.models import User
@@ -641,3 +643,107 @@ def test_empty_state_filter_links_target_the_landing_page(employee_client):
     assert "There are no open jobs." in content
     assert f'href="{with_filter(job_url(closed_job), "closed")}">' in content
     assert "filter hides it" not in content
+
+
+# Workspace header: close and reopen job
+
+
+def close_link(content):
+    """The href of the workspace header's Close job link, or None."""
+    match = re.search(r'<a href="([^"]+)"[^>]*>\s*Close job\s*</a>', content)
+    return match and html.unescape(match.group(1))
+
+
+def reopen_form(content):
+    """(action, next) of the workspace header's Reopen job form, or None."""
+    match = re.search(
+        r'<form method="post" action="([^"]+)">(?:(?!</form>).)*?'
+        r'name="next" value="([^"]+)">(?:(?!</form>).)*?Reopen job',
+        content,
+        re.DOTALL,
+    )
+    return match and (match.group(1), html.unescape(match.group(2)))
+
+
+def test_close_and_reopen_from_the_header_return_to_the_same_application(
+    employee_client,
+):
+    job = make_job(title="Data Analyst")
+    application = add_application(job)
+    here = with_filter(app_url(application), "all")
+    close_url = reverse("hiring:job_close", args=[job.pk])
+
+    page = employee_client.get(here).content.decode()
+    assert close_link(page) == f"{close_url}?next={quote(here)}"
+    assert "Reopen job" not in page
+
+    # The confirmation page carries the return address and uses it for Cancel.
+    confirm = employee_client.get(close_link(page)).content.decode()
+    assert f'name="next" value="{html.escape(here)}"' in confirm
+    assert f'href="{html.escape(here)}" class="btn btn-ghost">Cancel' in confirm
+
+    response = employee_client.post(close_url, {"next": here})
+    assert response.url == here
+    page = employee_client.get(here).content.decode()
+    assert close_link(page) is None
+    assert reopen_form(page) == (reverse("hiring:job_reopen", args=[job.pk]), here)
+
+    response = employee_client.post(reopen_form(page)[0], {"next": here})
+    assert response.url == here
+    job.refresh_from_db()
+    assert job.status == JobOpening.Status.OPEN
+    assert job.closed_at is None
+
+
+@pytest.mark.parametrize(
+    ("page", "expected"),
+    [
+        # The landing page returns to its job, so closing can't switch jobs.
+        (lambda job, app: reverse("hiring:pipeline"), "job?jobs=open"),
+        (lambda job, app: with_filter(job_url(job), "closed"), "job?jobs=closed"),
+        (lambda job, app: app_url(app), "app?jobs=open"),
+    ],
+    ids=["landing", "job", "application"],
+)
+def test_header_close_returns_to_the_displayed_job_or_application_and_filter(
+    employee_client, page, expected
+):
+    job = make_job(title="Data Analyst")
+    application = add_application(job)
+    base, query = expected.split("?")
+    target = (job_url(job) if base == "job" else app_url(application)) + "?" + query
+
+    content = employee_client.get(page(job, application)).content.decode()
+
+    close_url = reverse("hiring:job_close", args=[job.pk])
+    assert close_link(content) == f"{close_url}?next={quote(target)}"
+
+
+def test_header_after_a_failed_move_returns_to_the_application_not_the_move_url(
+    employee_client, employee
+):
+    job = make_job(title="Data Analyst")
+    application = record(make_candidate(), job, employee)
+    move_url = reverse("hiring:application_move", args=[application.pk])
+
+    response = employee_client.post(f"{move_url}?jobs=all", {"stage": "bogus"})
+
+    target = with_filter(app_url(application), "all")
+    close_url = reverse("hiring:job_close", args=[job.pk])
+    assert close_link(response.content.decode()) == f"{close_url}?next={quote(target)}"
+
+
+def test_header_reopen_leaves_finished_applications_finished(employee_client, employee):
+    job = make_job(title="Data Analyst")
+    rejected = record(make_candidate(), job, employee)
+    services.move_application(rejected, Stage.REJECTED, changed_by=employee)
+    services.close_job(job)
+    here = app_url(rejected)
+
+    employee_client.post(reverse("hiring:job_reopen", args=[job.pk]), {"next": here})
+
+    assert Application.objects.get(pk=rejected.pk).stage == Stage.REJECTED
+    assert rejected.history.count() == 2
+    # Reopening the job makes reopening the application possible again.
+    page = html.unescape(employee_client.get(here).content.decode())
+    assert "Reopen to Applied" in page

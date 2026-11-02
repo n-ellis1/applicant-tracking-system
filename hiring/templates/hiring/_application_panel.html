@@ -53,6 +53,12 @@
   </div>
 {% endif %}
 
+{% if facts.reopened_from_withdrawn %}
+  <div role="alert" class="alert alert-info">
+    <span>This application was reopened after being withdrawn, so it can't skip stages. Every forward move is one stage at a time, including Offer to Hired.</span>
+  </div>
+{% endif %}
+
 {% if move_errors %}
   <div role="alert" class="alert alert-error">
     <div class="min-w-0 break-words">
@@ -67,13 +73,20 @@
 {% url 'hiring:application_move' selected.pk as move_url %}
 <section class="flex flex-col gap-3" aria-labelledby="actions-heading">
   <h3 id="actions-heading" class="font-semibold">Stage actions</h3>
-  {% if actions.advance or actions.end_moves %}
+  {% if actions.advance or actions.reopen or actions.end_moves %}
     <div class="flex flex-wrap items-start gap-2">
       {% if actions.advance %}
         <form method="post" action="{{ move_url }}?jobs={{ jobs_filter }}">
           {% csrf_token %}
           <input type="hidden" name="stage" value="{{ actions.advance }}">
           <button type="submit" class="btn btn-sm btn-primary">Advance to {{ actions.advance.label }}</button>
+        </form>
+      {% endif %}
+      {% if actions.reopen %}
+        <form method="post" action="{{ move_url }}?jobs={{ jobs_filter }}">
+          {% csrf_token %}
+          <input type="hidden" name="stage" value="{{ actions.reopen }}">
+          <button type="submit" class="btn btn-sm btn-primary">Reopen to {{ actions.reopen.label }}</button>
         </form>
       {% endif %}
       {# Rejected and Withdrawn are reachable only through these confirmation boxes. #}
@@ -107,7 +120,7 @@
     </div>
   {% endif %}
 
-  {% if not actions.advance and not actions.end_moves and not actions.other_moves %}
+  {% if not actions.advance and not actions.reopen and not actions.end_moves and not actions.other_moves %}
     <p class="text-base-content/80">No stage moves are available.</p>
   {% endif %}
 
