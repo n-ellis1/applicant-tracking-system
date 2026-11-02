@@ -1,0 +1,18 @@
+{# Tabs and search. They target the displayed job or application, so an HTMX selection re-renders them out of band. #}
+<div id="list-controls" class="contents"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% if job_has_applications %}
+    {# Counts reflect the job and search, whichever tab is shown. #}
+    <div role="tablist" aria-label="Application tabs" class="tabs tabs-box tabs-sm">
+      {% for t in tabs %}
+        <a role="tab" href="{{ t.url }}" class="tab grow gap-1{% if t.value == tab %} tab-active{% endif %}" aria-selected="{% if t.value == tab %}true{% else %}false{% endif %}">{{ t.label }} <span class="badge badge-sm badge-neutral">{{ t.count }}</span></a>
+      {% endfor %}
+    </div>
+    <form method="get" action="{{ filter_base }}" role="search" class="join w-full">
+      <input type="hidden" name="jobs" value="{{ jobs_filter }}">
+      {% if tab != 'active' %}<input type="hidden" name="tab" value="{{ tab }}">{% endif %}
+      <label for="application-search" class="sr-only">Search applications by name or email</label>
+      <input id="application-search" type="search" name="q" value="{{ q }}" placeholder="Name or email" class="input input-sm join-item w-full min-w-0">
+      <button type="submit" class="btn btn-sm join-item">Search</button>
+    </form>
+  {% endif %}
+</div>

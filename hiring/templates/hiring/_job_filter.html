@@ -1,0 +1,14 @@
+{# Sidebar filter links and the hidden-job note. They target the displayed job or application, so an HTMX selection re-renders them out of band. #}
+<div id="job-filter" class="contents"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <div role="group" aria-label="Job filter" class="join w-full">
+    {% for value, label, url in filter_links %}
+      <a href="{{ url }}" class="btn btn-sm join-item grow{% if value == jobs_filter %} btn-primary{% else %} btn-outline{% endif %}"{% if value == jobs_filter %} aria-current="true"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </div>
+  {% if job_hidden %}
+    <p class="mt-1 rounded-box bg-base-300 p-2 text-sm break-words">
+      {{ job.title }} is {{ job.get_status_display|lower }}, so the {{ jobs_filter|capfirst }} filter hides it.
+      <a href="{{ show_all_url }}" class="link">Show all jobs</a>
+    </p>
+  {% endif %}
+</div>

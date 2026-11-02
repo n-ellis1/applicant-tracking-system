@@ -1,0 +1,35 @@
+{# The job's applications for the current tab and search. An HTMX selection re-renders it out of band to move the highlight. #}
+<div id="application-list"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% if groups %}
+    {# One group per stage, in pipeline order. #}
+    <div class="flex flex-col gap-3">
+      {% for group in groups %}
+        <div>
+          <h3 class="flex items-center gap-2 px-2 text-sm font-semibold text-base-content/70">{{ group.stage.label }} <span class="badge badge-sm badge-neutral">{{ group.applications|length }}</span></h3>
+          <ul class="menu w-full p-0" aria-label="{{ group.stage.label }} applications">
+            {% for application in group.applications %}
+              {% url 'hiring:application_detail' application.pk as detail_url %}
+              <li>
+                {# HTMX loads the same URL into the panel and pushes it; the href works without JavaScript. #}
+                <a hx-get="{{ detail_url }}?{{ list_query }}" hx-target="#application-panel" hx-push-url="true" href="{{ detail_url }}?{{ list_query }}"{% if application == selected %} aria-current="true" class="menu-active"{% endif %}>
+                  <span class="flex min-w-0 grow flex-col">
+                    <span class="break-words font-medium">{{ application.candidate }}</span>
+                    <span class="break-all text-xs opacity-80">{{ application.candidate.email }}</span>
+                  </span>
+                </a>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endfor %}
+    </div>
+  {% elif job_has_applications %}
+    <p class="text-base-content/80">
+      {% if q %}No {{ tab|lower }} applications match “{{ q }}”.{% elif tab == 'finished' %}No finished applications for this job.{% else %}No active applications for this job.{% endif %}
+    </p>
+  {% else %}
+    <p class="text-base-content/80">
+      No applications for this job yet.{% if job.status != 'open' %} The job is closed, so new applications can't be added.{% endif %}
+    </p>
+  {% endif %}
+</div>

@@ -1,4 +1,7 @@
 {% extends "base.html" %}
+{% load static %}
+
+{% block head %}<script src="{% static 'js/pipeline.js' %}" defer></script>{% endblock %}
 
 {% block title %}{% if selected %}{{ selected.candidate }} · {% endif %}{% if job %}{{ job.title }}{% else %}Pipeline{% endif %}{% endblock %}
 
@@ -7,17 +10,7 @@
     {# Jobs sidebar: open and closed jobs, each a normal link. #}
     <aside class="card h-fit border border-base-300 bg-base-200">
       <nav class="card-body gap-1 p-2" aria-label="Jobs">
-        <div role="group" aria-label="Job filter" class="join w-full">
-          {% for value, label, url in filter_links %}
-            <a href="{{ url }}" class="btn btn-sm join-item grow{% if value == jobs_filter %} btn-primary{% else %} btn-outline{% endif %}"{% if value == jobs_filter %} aria-current="true"{% endif %}>{{ label }}</a>
-          {% endfor %}
-        </div>
-        {% if job_hidden %}
-          <p class="mt-1 rounded-box bg-base-300 p-2 text-sm break-words">
-            {{ job.title }} is {{ job.get_status_display|lower }}, so the {{ jobs_filter|capfirst }} filter hides it.
-            <a href="{{ show_all_url }}" class="link">Show all jobs</a>
-          </p>
-        {% endif %}
+        {% include "hiring/_job_filter.html" %}
         {% if jobs_filter != 'closed' %}
           <h2 class="px-2 pt-2 text-sm font-semibold text-base-content/70">Open jobs</h2>
           <ul class="menu w-full">
@@ -49,75 +42,15 @@
             <h1 id="job-heading" class="min-w-0 break-words text-xl font-semibold">{{ job.title }}</h1>
             <span class="badge {% if job.status == 'open' %}badge-success{% else %}badge-neutral{% endif %}">{{ job.get_status_display }}</span>
           </div>
-          <div class="flex flex-wrap gap-2">
-            {% if job.status == 'open' %}
-              <a href="{% url 'hiring:job_application_create' job.pk %}" class="btn btn-sm btn-primary">Add application</a>
-            {% endif %}
-            <a href="{% url 'hiring:job_detail' job.pk %}" class="btn btn-sm btn-outline">Job details</a>
-            {# Both return to this workspace view, keeping the selection and filter. #}
-            {% if job.status == 'open' %}
-              <a href="{% url 'hiring:job_close' job.pk %}?next={{ return_url|urlencode }}" class="btn btn-sm btn-outline btn-warning">Close job</a>
-            {% else %}
-              <form method="post" action="{% url 'hiring:job_reopen' job.pk %}">
-                {% csrf_token %}
-                <input type="hidden" name="next" value="{{ return_url }}">
-                <button type="submit" class="btn btn-sm btn-outline btn-success">Reopen job</button>
-              </form>
-            {% endif %}
-          </div>
-
-          {% if job_has_applications %}
-            {# Counts reflect the job and search, whichever tab is shown. #}
-            <div role="tablist" aria-label="Application tabs" class="tabs tabs-box tabs-sm">
-              {% for t in tabs %}
-                <a role="tab" href="{{ t.url }}" class="tab grow gap-1{% if t.value == tab %} tab-active{% endif %}" aria-selected="{% if t.value == tab %}true{% else %}false{% endif %}">{{ t.label }} <span class="badge badge-sm badge-neutral">{{ t.count }}</span></a>
-              {% endfor %}
-            </div>
-            <form method="get" action="{{ filter_base }}" role="search" class="join w-full">
-              <input type="hidden" name="jobs" value="{{ jobs_filter }}">
-              {% if tab != 'active' %}<input type="hidden" name="tab" value="{{ tab }}">{% endif %}
-              <label for="application-search" class="sr-only">Search applications by name or email</label>
-              <input id="application-search" type="search" name="q" value="{{ q }}" placeholder="Name or email" class="input input-sm join-item w-full min-w-0">
-              <button type="submit" class="btn btn-sm join-item">Search</button>
-            </form>
-          {% endif %}
-
-          {% if groups %}
-            {# One group per stage, in pipeline order. #}
-            <div class="flex flex-col gap-3">
-              {% for group in groups %}
-                <div>
-                  <h3 class="flex items-center gap-2 px-2 text-sm font-semibold text-base-content/70">{{ group.stage.label }} <span class="badge badge-sm badge-neutral">{{ group.applications|length }}</span></h3>
-                  <ul class="menu w-full p-0" aria-label="{{ group.stage.label }} applications">
-                    {% for application in group.applications %}
-                      <li>
-                        <a href="{% url 'hiring:application_detail' application.pk %}?{{ list_query }}"{% if application == selected %} aria-current="true" class="menu-active"{% endif %}>
-                          <span class="flex min-w-0 grow flex-col">
-                            <span class="break-words font-medium">{{ application.candidate }}</span>
-                            <span class="break-all text-xs opacity-80">{{ application.candidate.email }}</span>
-                          </span>
-                        </a>
-                      </li>
-                    {% endfor %}
-                  </ul>
-                </div>
-              {% endfor %}
-            </div>
-          {% elif job_has_applications %}
-            <p class="text-base-content/80">
-              {% if q %}No {{ tab|lower }} applications match “{{ q }}”.{% elif tab == 'finished' %}No finished applications for this job.{% else %}No active applications for this job.{% endif %}
-            </p>
-          {% else %}
-            <p class="text-base-content/80">
-              No applications for this job yet.{% if job.status != 'open' %} The job is closed, so new applications can't be added.{% endif %}
-            </p>
-          {% endif %}
+          {% include "hiring/_job_controls.html" %}
+          {% include "hiring/_list_controls.html" %}
+          {% include "hiring/_application_list.html" %}
         </div>
       </section>
 
       {# Detail panel for the selected application. #}
       <section class="card h-fit min-w-0 border border-base-300 bg-base-200" aria-label="Application details">
-        <div class="card-body gap-5 p-4">
+        <div id="application-panel" class="card-body gap-5 p-4">
           {% if selected %}
             {% include "hiring/_application_panel.html" %}
           {% else %}

@@ -534,11 +534,11 @@ Selecting an application swaps the detail panel and moves the selection highligh
 
 ### Acceptance criteria
 
-- [ ] Selecting an application updates the panel and highlight without a full reload, and the URL includes the application, tab and search.
-- [ ] The selection URL returns the partial with `HX-Request`, and the full page without it or with `HX-History-Restore-Request`.
-- [ ] Opening an application URL directly (typed, bookmarked, or from a candidate page) renders the full workspace with that job, application, tab and search.
-- [ ] Back and Forward across several selections restore the matching panel and highlight.
-- [ ] On a narrow screen the detail panel comes into view after selection.
+- [x] Selecting an application updates the panel and highlight without a full reload, and the URL includes the application, tab and search.
+- [x] The selection URL returns the partial with `HX-Request`, and the full page without it or with `HX-History-Restore-Request`.
+- [x] Opening an application URL directly (typed, bookmarked, or from a candidate page) renders the full workspace with that job, application, tab and search.
+- [x] Back and Forward across several selections restore the matching panel and highlight.
+- [x] On a narrow screen the detail panel comes into view after selection.
 
 ### Possible TDD candidates (not approved)
 

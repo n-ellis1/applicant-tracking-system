@@ -28,6 +28,132 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 11: HTMX selection and browser history
+
+### Prompts
+
+1. **Start Phase 11 (`/implement`).**
+   > /implement @prd/applicant-tracking-system.md @plans/applicant-tracking-system.md implement Phase 11 only
+   >
+   > Read CLAUDE.md and follow the implement and tdd skills. Preserve the existing stage rules and jobs/tab/q URL behavior.
+   >
+   > Add HTMX application selection with the correct selection highlight and URL updates. Direct links and refresh must still render the full workspace. Back and Forward must restore the matching selection, including after an HTMX history-cache miss. On narrow screens, bring the detail panel into view after selection.
+   >
+   > Propose the TDD candidates and wait for my approval before writing code.
+   >
+   > Keep stage-action and details-form HTMX changes for Phase 12. After automated checks pass, give me browser verification steps and wait for my confirmation. Don't mark the phase complete, commit, push, or start Phase 12 yet.
+
+2. **Approve all three candidates; add Vary on both headers and keep outside URLs in sync.**
+   > I approve all three candidates.
+   >
+   > Make caching distinguish both HX-Request and HX-History-Restore-Request, since either header can change whether the response is partial or full. Test the Vary headers too. Don't claim Vary alone proves browser history works; we'll verify that manually.
+   >
+   > Also keep selection-dependent URLs outside the panel, such as sidebar filter links and the header's close/reopen return address, in sync with the newly selected application.
+   >
+   > Start with candidate 1. Show me the test and RED result, then stop for approval before implementing it.
+
+3. **Approve candidate 1's test.**
+   > I approve this test. Implement partial responses for HTMX selection and full-page responses for normal and history-restore requests.
+   >
+   > Show me the GREEN result and full regression results, then stop before candidate 2. Keep the Vary-header and selection-dependent URL tests on the checklist.
+
+4. **Start candidate 2.**
+   > Yes, proceed to candidate 2 for the out-of-band selection highlight. Check that exactly the newly selected application is highlighted within the updated application list.
+   >
+   > Show me the test and RED result, then stop for approval before implementing it.
+
+5. **Approve candidate 2's test and the template split.**
+   > I approve this test and the proposed template split. Implement the shared application-list partial and the selection response with its out-of-band list update.
+   >
+   > Preserve the current tab, search, and sidebar filter when rendering the list. Show me the GREEN result and full regression results, then stop before candidate 3.
+
+6. **Start candidate 3.**
+   > Yes, proceed to candidate 3. Check that application links keep their normal href, use the same URL for hx-get, target the detail panel, and enable URL pushing while preserving jobs/tab/q.
+   >
+   > Show me the test and RED result, then stop for approval before implementing the link attributes.
+
+7. **Approve candidate 3's test and finish the phase.**
+   > I approve this test and the panel-target approach. Add the HTMX attributes while keeping the normal href intact.
+   >
+   > Show me the GREEN result and full regression results. Then finish the planned ordinary tests, Vary headers, selection-dependent URL updates, title, and narrow-screen scrolling.
+   >
+   > Run the remaining checks and give me browser verification steps. Don't mark Phase 11 complete, commit, push, or start Phase 12 until I confirm.
+
+8. **Browser checks passed; mark complete and propose CLAUDE.md.**
+   > All Phase 11 browser checks passed, including HTMX selection, highlights and titles, controls following selection, preserved filters, refresh and direct links, Back/Forward, history-cache misses, narrow-screen scrolling, and existing stage-action behavior.
+   >
+   > Mark Phase 11 complete. Show me any proposed CLAUDE.md updates, limited to concise, durable conventions verified in this phase. Keep it within our 70-80-line target by updating existing guidance where possible.
+   >
+   > Don't commit or start Phase 12 yet.
+
+9. **Correction: shorter layout lines, GET-only wording, and write this log.**
+   > Approve the updates with these shorter layout lines:
+   >
+   > - hiring/templates/hiring/pipeline.html: workspace assembled from shared sidebar, controls, list, and panel partials. _workspace renders full pages or _selection.html from the same context.
+   > - static/js/htmx.min.js: vendored HTMX 2.0.4. static/js/pipeline.js: narrow-screen panel scrolling, loaded through the base template's head block.
+   >
+   > Keep both proposed convention lines, but describe the partial/full-page rule as applying to workspace GET views. Phase 12 POST responses should follow their own planned behavior.
+   >
+   > Apply the updates and report the line count. Write this session log to PROMPTS.md according to its instructions, including the three RED-to-GREEN candidates, ordinary checks, and browser verification.
+   >
+   > Show me the changed-file summary and proposed commit message before committing. Don't start Phase 12.
+
+### Summary
+
+- **Outcome:**
+  - **Selection view (`application_detail` in `hiring/views.py`):**
+    - **Partial or full page:** `_wants_partial(request)` is true only when `HX-Request` is present without `HX-History-Restore-Request`. Then the view renders `hiring/_selection.html`. Otherwise it renders the full workspace, which covers direct links, refresh and history-cache misses.
+    - **Shared context:** `_workspace()` gained a `template` argument, so both responses come from the same context built from `jobs`, `tab` and `q`.
+    - **Vary:** every response sends `Vary: HX-Request, HX-History-Restore-Request`, via `patch_vary_headers`.
+  - **Templates:**
+    - **Partials:** the workspace was split into `_job_filter.html` (sidebar filter links and hidden-job note), `_job_controls.html` (header actions, including close/reopen `next`), `_list_controls.html` (tabs and search) and `_application_list.html` (grouped list and empty states). Each has a stable id, and `oob=True` adds `hx-swap-oob="true"`. The filter and list-controls wrappers use `contents`, so the layout doesn't change.
+    - **`_selection.html`:** a `<title>` matching the full page's, the panel, and the four partials out of band.
+    - **Panel target:** the panel's inner `card-body` has `id="application-panel"`.
+    - **Links:** each application link keeps its `href` and gets `hx-get` (same URL), `hx-target="#application-panel"` and `hx-push-url="true"`. The HTMX attributes come before `href`, so existing `href="…"` assertions still match.
+  - **Narrow screens:** `static/js/pipeline.js` scrolls the panel's card into view after an HTMX swap into `#application-panel`, only below 64rem (Tailwind's `lg`), respecting reduced motion. It loads in `<head>` through a new `{% block head %}` in `base.html`, so body swaps and history restores never add the listener twice.
+  - **Unchanged:** stage actions and move forms are still normal POSTs (Phase 12). Stage rules and `jobs`/`tab`/`q` building are untouched.
+  - **TDD, three candidates (all RED-to-GREEN, in `hiring/tests/test_selection.py`):**
+    1. **Partial for HTMX, full page otherwise** (`test_selection_returns_the_panel_for_htmx_and_the_full_page_otherwise`): parametrized normal, HTMX and history-restore requests. Panel content in all three; `<!doctype html>` and the Jobs sidebar only in the full page. **RED** on the `[htmx]` case with `assert ('<!doctype html>' in '<!doctype html>…') is False`. **The `[normal]` and `[history-restore]` cases passed before the change**, as reported, and stay as regression guards. `_wants_partial()` and the template argument made it **GREEN**.
+    2. **Out-of-band highlight on only the new selection** (`test_htmx_selection_highlights_only_the_new_application_out_of_band`): three applications, the second selected through HTMX. An `HTMLParser` helper (`links_inside`) finds `#application-list`. The test checks it has `hx-swap-oob="true"`, lists all three, and has exactly one link with `aria-current` and `menu-active`, the new selection. **RED** with `assert None is not None`, because the response had no list. The shared list partial and `_selection.html` made it **GREEN**.
+    3. **Links load into the panel and push their own URL** (`test_selection_links_load_into_the_panel_and_push_their_own_url`): with `jobs=all&tab=all&q=lee`, every list link's `href` keeps the state, `hx-get` equals the `href`, `hx-target` is `#application-panel` and `hx-push-url` is `true`. The target exists on the page. **RED** with `assert None == '/pipeline/applications/2/?jobs=all&tab=all&q=lee'`, because the link had only `href`. The link attributes and the panel id made it **GREEN**.
+  - **Ordinary tests** (all passed on first run once written), 5 functions (7 cases):
+    - the out-of-band list keeps `jobs`, `tab` and `q`, and leaves out non-matching applications
+    - `Vary` includes both headers for normal, HTMX and history-restore requests (3 cases)
+    - out-of-band filter links, the hidden-job note's link, tab links, the search form action, and Close job's `next` all target the new selection
+    - Reopen job's hidden `next` targets the new selection on a closed job
+    - the HTMX `<title>` equals the full page's
+  - **Test totals:** 550 before Phase 11, 562 after. That's +3 (candidate 1), +1 (candidate 2), +1 (candidate 3) and +7 (ordinary).
+  - **Automated checks:** 562 passed. `ruff check`, `ruff format --check` and `makemigrations --check` were clean, and `tailwind build` compiled the `contents` class. No migration was needed.
+  - **Browser checks (by me):** all passed. They covered:
+    - HTMX selection, highlights and titles
+    - controls following the selection
+    - preserved filters
+    - refresh and direct links
+    - Back and Forward
+    - history-cache misses
+    - narrow-screen scrolling
+    - existing stage-action behavior
+  - **Docs:**
+    - All five Phase 11 acceptance criteria are ticked in the plan.
+    - CLAUDE.md's `pipeline.html` and `static/js` layout lines use my shorter wording.
+    - Conventions gained the partial/full-page rule for workspace GET views with `Vary`, and the HTMX link and out-of-band pattern.
+    - It's 73 lines.
+- **Deviations:**
+  - **Vary on both headers:** the agent's plan had `Vary: HX-Request` only. I required both headers and a test, and that the `Vary` test not be presented as proof that browser history works.
+  - **Controls outside the panel:** the agent's plan updated only the list highlight out of band. I required the sidebar filter links and the close/reopen return address to follow the selection too. The agent extended this to the tabs, search form and hidden-job note, which also target the displayed application.
+  - **Tab, search and filter in the out-of-band list:** I asked for them to be preserved. Candidate 2's test checked only `jobs=open`, so an ordinary test covers the non-default state.
+  - **CLAUDE.md:** I replaced the two layout lines with shorter wording and limited the partial/full-page convention to workspace GET views, leaving Phase 12's POST responses to their own plan.
+- **Sideways:**
+  - **Candidate 1 scaffolding:** the first run failed with a `TypeError`, because the new test file's `record` helper left out `applied_on`. It was fixed to match `test_pipeline.py`'s helper before RED was shown.
+  - **Early passes:** candidate 1's normal and history-restore cases passed before the change, as described above.
+  - **Test wording before approval:** candidate 2's comment first said the second application was selected "after the first was displayed", which the stateless server can't know. It was reworded before the test was presented. Candidate 3's draft also asserted the panel target's `aria-label`, which sits on the outer section, not the `card-body`. That assertion was dropped before the first run.
+  - **Existing assertions shaped markup:** `test_pipeline.py` checks `href="…">` directly, so the HTMX attributes were placed before `href` rather than changing those tests.
+  - **Ordinary tests not run RED:** they were written after the code, so they weren't seen failing first.
+  - **Formatter:** `ruff format` rewrapped the `Vary` test's `parametrize` list. Nothing it asserts changed.
+  - **Tool timeout:** the first combined test and full-suite run passed the shell's 120-second limit and finished in the background. Later runs used a longer timeout.
+  - **Outdated comment still left:** `add_application` in `test_pipeline.py` still says "Moving applications arrives in Phase 8".
+  - **Skill lookup:** `/implement` isn't a registered skill in this session, so the agent read `.claude/skills/implement/SKILL.md` directly.
+
 ## 2026-11-01 — Phase 10: Workspace list: stage groups, tabs and search
 
 ### Prompts

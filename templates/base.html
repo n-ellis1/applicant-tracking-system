@@ -6,6 +6,7 @@
   <title>{% block title %}Hiring{% endblock %} · Applicant Tracking</title>
   {% tailwind_css %}
   <script src="{% static 'js/htmx.min.js' %}" defer></script>
+  {% block head %}{% endblock %}
 </head>
 <body class="min-h-screen bg-base-100 text-base-content">
   {% if user.is_authenticated %}

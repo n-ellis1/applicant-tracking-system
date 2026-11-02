@@ -5,6 +5,7 @@ from django.core.paginator import Paginator
 from django.db.models import Count, Max, ProtectedError, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.cache import patch_vary_headers
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET, require_POST
 
@@ -81,7 +82,9 @@ def _stage_actions(application, facts):
 APPLICATION_TABS = [("active", "Active"), ("finished", "Finished"), ("all", "All")]
 
 
-def _workspace(request, job, selected=None, move_form=None):
+def _workspace(
+    request, job, selected=None, move_form=None, template="hiring/pipeline.html"
+):
     # job is None only on the landing page when no job is open.
     # The sidebar filter defaults to the job's status so its link is visible;
     # the landing page defaults to Open.
@@ -186,7 +189,15 @@ def _workspace(request, job, selected=None, move_form=None):
                 for messages in move_form.errors.values()
                 for message in messages
             ]
-    return render(request, "hiring/pipeline.html", context)
+    return render(request, template, context)
+
+
+def _wants_partial(request):
+    # A history-restore request comes from an HTMX history-cache miss and
+    # must get the full page.
+    return "HX-Request" in request.headers and (
+        "HX-History-Restore-Request" not in request.headers
+    )
 
 
 def _list_query(jobs_filter, tab, q):
@@ -379,7 +390,19 @@ def application_detail(request, pk):
     application = get_object_or_404(
         Application.objects.select_related("candidate", "job"), pk=pk
     )
-    return _workspace(request, application.job, application)
+    if _wants_partial(request):
+        response = _workspace(
+            request,
+            application.job,
+            application,
+            template="hiring/_selection.html",
+        )
+    else:
+        response = _workspace(request, application.job, application)
+    # The same URL serves the panel or the full page depending on these
+    # headers, so caches must keep the two apart.
+    patch_vary_headers(response, ["HX-Request", "HX-History-Restore-Request"])
+    return response
 
 
 @require_POST

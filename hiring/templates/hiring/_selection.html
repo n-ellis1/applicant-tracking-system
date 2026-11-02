@@ -1,0 +1,7 @@
+{# HTMX selection response: the detail panel, plus out-of-band updates for everything outside it that depends on the selection. The title matches the full page's, so history entries are named correctly. #}
+<title>{{ selected.candidate }} · {{ job.title }} · Applicant Tracking</title>
+{% include "hiring/_application_panel.html" %}
+{% include "hiring/_application_list.html" with oob=True %}
+{% include "hiring/_list_controls.html" with oob=True %}
+{% include "hiring/_job_controls.html" with oob=True %}
+{% include "hiring/_job_filter.html" with oob=True %}

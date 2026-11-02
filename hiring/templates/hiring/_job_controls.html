@@ -1,0 +1,17 @@
+{# Workspace header actions. Close and reopen return to the displayed view, so an HTMX selection re-renders them out of band. #}
+<div id="job-controls" class="flex flex-wrap gap-2"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% if job.status == 'open' %}
+    <a href="{% url 'hiring:job_application_create' job.pk %}" class="btn btn-sm btn-primary">Add application</a>
+  {% endif %}
+  <a href="{% url 'hiring:job_detail' job.pk %}" class="btn btn-sm btn-outline">Job details</a>
+  {# Both return to this workspace view, keeping the selection and filter. #}
+  {% if job.status == 'open' %}
+    <a href="{% url 'hiring:job_close' job.pk %}?next={{ return_url|urlencode }}" class="btn btn-sm btn-outline btn-warning">Close job</a>
+  {% else %}
+    <form method="post" action="{% url 'hiring:job_reopen' job.pk %}">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ return_url }}">
+      <button type="submit" class="btn btn-sm btn-outline btn-success">Reopen job</button>
+    </form>
+  {% endif %}
+</div>
