@@ -39,6 +39,11 @@ urlpatterns = [
         views.application_details,
         name="application_details",
     ),
+    path(
+        "applications/<int:pk>/delete/",
+        views.application_delete,
+        name="application_delete",
+    ),
     path("jobs/", views.job_list, name="job_list"),
     path("jobs/new/", views.job_create, name="job_create"),
     path("jobs/<int:pk>/", views.job_detail, name="job_detail"),

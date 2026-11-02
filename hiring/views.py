@@ -204,6 +204,15 @@ def _workspace(
         facts = services.stage_facts(selected.stage, history)
         context["facts"] = facts
         context["actions"] = _stage_actions(selected, facts)
+        # Only a never-moved application can be deleted. Afterwards, return
+        # to its job with the current filter, tab and search.
+        if not any(entry.old_stage for entry in history):
+            job_url = reverse("hiring:pipeline_job", args=[selected.job.pk])
+            context["delete_url"] = (
+                reverse("hiring:application_delete", args=[selected.pk])
+                + "?"
+                + urlencode({"next": f"{job_url}?{list_query}"})
+            )
         if move_form is not None:
             context["move_errors"] = [
                 message
@@ -489,6 +498,39 @@ def application_details(request, pk):
     )
     patch_vary_headers(response, ["HX-Request", "HX-History-Restore-Request"])
     return response
+
+
+def application_delete(request, pk):
+    # Only a never-moved application can be deleted, together with its
+    # initial history entry.
+    application = get_object_or_404(
+        Application.objects.select_related("candidate", "job"), pk=pk
+    )
+    if request.method == "POST":
+        try:
+            application.delete()
+        except ProtectedError:
+            pass  # The page below explains that it has moved.
+        else:
+            return redirect(
+                _next_or(
+                    request,
+                    reverse("hiring:pipeline_job", args=[application.job.pk]),
+                )
+            )
+    next_url = _next_or(request, "")
+    return render(
+        request,
+        "hiring/application_confirm_delete.html",
+        {
+            "application": application,
+            "moved": Application.objects.filter(pk=pk).moved().exists(),
+            "next": next_url,
+            "cancel_url": next_url
+            or reverse("hiring:application_detail", args=[pk]) + "?tab=all",
+            "active_nav": "pipeline",
+        },
+    )
 
 
 def _panel_or_page(request):

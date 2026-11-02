@@ -610,12 +610,12 @@ Tests cover every deletion path for candidates, jobs, applications and skills th
 
 ### Acceptance criteria
 
-- [ ] A never-moved application can be deleted after confirmation, along with its initial history entry, in one transaction.
-- [ ] An application that has ever moved can't be deleted through the app view, `delete()`, QuerySet delete, admin single delete or admin bulk delete, even after returning to Applied. Its history stays intact.
-- [ ] Editing notes or applied-on date doesn't change delete eligibility.
-- [ ] Candidates and jobs with applications, and used skills, can't be deleted through admin single or bulk delete.
-- [ ] In admin, application stage, candidate and job are read-only, and history has no add, edit or delete.
-- [ ] Staff can't add, edit or delete history entries through any app page.
+- [x] A never-moved application can be deleted after confirmation, along with its initial history entry, in one transaction.
+- [x] An application that has ever moved can't be deleted through the app view, `delete()`, QuerySet delete, admin single delete or admin bulk delete, even after returning to Applied. Its history stays intact.
+- [x] Editing notes or applied-on date doesn't change delete eligibility.
+- [x] Candidates and jobs with applications, and used skills, can't be deleted through admin single or bulk delete.
+- [x] In admin, application stage, candidate and job are read-only, and history has no add, edit or delete.
+- [x] Staff can't add, edit or delete history entries through any app page.
 
 ### Possible TDD candidates (not approved)
 

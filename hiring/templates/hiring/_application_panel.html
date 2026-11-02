@@ -182,6 +182,13 @@
     {% endfor %}
   </ol>
 </section>
+
+{% if delete_url %}
+  {# Offered only while the application has never moved. A normal link to the confirmation page. #}
+  <div>
+    <a href="{{ delete_url }}" class="btn btn-sm btn-outline btn-error">Delete application…</a>
+  </div>
+{% endif %}
 {% else %}
   <p class="text-base-content/80">Select an application to see its details.</p>
 {% endif %}

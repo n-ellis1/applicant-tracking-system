@@ -1,6 +1,8 @@
+from functools import partial
+
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.db.models import ProtectedError
 from django.db.models.functions import Lower
 from django.utils import timezone
@@ -132,6 +134,38 @@ def validate_not_future(value):
         raise ValidationError("The applied-on date can't be in the future.")
 
 
+MOVED_APPLICATION = "Applications that have changed stages can't be deleted."
+HISTORY_PROTECTED = "Stage history entries can't be deleted on their own."
+
+
+def delete_never_moved(applications, delete):
+    """Delete applications that never moved, with their initial entries.
+
+    Refuses all of them if any has ever moved, even back to Applied.
+    """
+    with transaction.atomic():
+        moved = Application.objects.filter(pk__in=applications).moved()
+        if moved.exists():
+            raise ProtectedError(MOVED_APPLICATION, set(moved))
+        # The one supported way to delete history. PROTECT stays a backstop
+        # if a move lands first: the delete is refused and this rolls back.
+        StageHistoryEntry.objects.filter(
+            application__in=applications, old_stage=""
+        )._delete_initial_entries()
+        return delete()
+
+
+class ApplicationQuerySet(models.QuerySet):
+    def moved(self):
+        """Applications that ever changed stage, even back to Applied."""
+        return self.filter(
+            pk__in=StageHistoryEntry.objects.exclude(old_stage="").values("application")
+        )
+
+    def delete(self):
+        return delete_never_moved(self, super().delete)
+
+
 class Application(models.Model):
     # Candidate and job are fixed once created.
     candidate = models.ForeignKey(
@@ -149,6 +183,8 @@ class Application(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    objects = ApplicationQuerySet.as_manager()
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -163,6 +199,21 @@ class Application(models.Model):
     def __str__(self):
         return f"{self.candidate} for {self.job}"
 
+    def delete(self, *args, **kwargs):
+        return delete_never_moved(
+            Application.objects.filter(pk=self.pk),
+            partial(super().delete, *args, **kwargs),
+        )
+
+
+class StageHistoryEntryQuerySet(models.QuerySet):
+    def delete(self):
+        raise ProtectedError(HISTORY_PROTECTED, set(self))
+
+    def _delete_initial_entries(self):
+        # Only delete_never_moved() calls this, for applications it deletes.
+        return super().delete()
+
 
 class StageHistoryEntry(models.Model):
     application = models.ForeignKey(
@@ -175,9 +226,15 @@ class StageHistoryEntry(models.Model):
     changed_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name="+")
     reason = models.TextField(blank=True)
 
+    # Only services create entries; nothing edits or deletes them on their own.
+    objects = StageHistoryEntryQuerySet.as_manager()
+
     class Meta:
         ordering = ["changed_at", "pk"]
         verbose_name_plural = "stage history entries"
 
     def __str__(self):
         return f"{self.application}: {self.old_stage or '-'} -> {self.new_stage}"
+
+    def delete(self, *args, **kwargs):
+        raise ProtectedError(HISTORY_PROTECTED, {self})

@@ -48,6 +48,9 @@ Internal Django applicant tracking system where hiring staff track candidates, j
 - Confirmation pages (delete, close) use GET for display and POST for the action. Actions without a confirmation page (reopen) are POST-only via `@require_POST`.
 - A `next` return address is followed only if `url_has_allowed_host_and_scheme` accepts it for `request.get_host()`; otherwise use the page's safe default. Confirmation pages carry a valid `next` in a hidden field and use it for Cancel.
 - Where built-in PROTECT is insufficient, enforce deletion rules on both model and QuerySet paths. App and admin deletion pages must explain blocking records instead of returning an error page.
+- Application deletes (model and QuerySet) go through `delete_never_moved()`: refused with `ProtectedError` if any is in `Application.objects.moved()` (history has an entry with an old stage), otherwise the initial entries and applications are removed in one transaction. Eligibility never depends on stage or job status.
+- `StageHistoryEntry` model and QuerySet deletes always refuse; only `delete_never_moved()` removes history. Keep `PROTECT` on its FK as a backstop.
+- When admin deletion depends on a custom rule, override `get_deleted_objects` so single and bulk delete pages list the blocking records. Admin never writes `Application.stage`, candidate or job (read-only, no admin add), and `StageHistoryEntryAdmin` is view-only.
 - Service operations report expected business-rule refusals with `ValidationError`. Views display the message in the relevant form or panel.
 - Validate service operations against current database state. Translate only identified constraint failures into friendly errors; let unrelated database errors propagate.
 - Where a service checks eligibility, `EligibleChoiceField` displays eligible records while allowing existing submitted records to reach that validation. Never rely on picker filtering alone.

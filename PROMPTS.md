@@ -28,6 +28,139 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 13: Application deletion and admin protections
+
+### Prompts
+
+1. **Start Phase 13 (`/implement`).**
+   > /implement @prd/applicant-tracking-system.md @plans/applicant-tracking-system.md implement Phase 13 only
+   >
+   > Read CLAUDE.md and follow the implement and tdd skills.
+   >
+   > Implement application deletion and admin protections according to Phase 13. Only never-moved applications may be deleted, removing their initial history entry in the same transaction. Applications that ever moved remain protected even after returning to Applied.
+   >
+   > Cover model, QuerySet, app, and admin single/bulk deletion paths. Keep application stage, candidate and job read-only in admin, and prevent independent history creation, editing or deletion.
+   >
+   > Propose at most three TDD candidates and wait for my approval before writing code. Don't begin Phase 14.
+
+2. **Approve all three candidates; full-history check for candidate 2; keep bulk coverage.**
+   > I approve all three TDD candidates.
+   >
+   > For candidate 2, verify that both applications and their complete histories remain unchanged after the mixed QuerySet deletion is refused.
+   >
+   > Keep ordinary coverage for admin bulk deletion too; the shared confirmation code alone doesn't prove the complete bulk action works correctly.
+   >
+   > Start with candidate 1. Show me the test, its RED result, and what passing will prove, then stop for approval before implementing.
+
+3. **Approve candidate 1's test and accept `ProtectedError` as RED.**
+   > I approve this test and explicitly approve the ProtectedError as RED for this candidate. It demonstrates the intended behavior is blocked by existing deletion protection; no scaffolding is missing. Don't change the test merely to force an assertion failure.
+   >
+   > Implement candidate 1 while preserving protection for moved applications and independent history deletion.
+   >
+   > Show the GREEN result and relevant regression results, then stop before candidate 2. Record this TDD exception when I request the session log.
+
+4. **Write candidate 2; report it honestly if it passes immediately.**
+   > Proceed with writing and running candidate 2 as approved. Verify both applications and their complete histories remain unchanged after the mixed deletion is refused.
+   >
+   > If it passes immediately, report it as existing behavior confirmed by a regression test, not a RED-to-GREEN cycle. Don't weaken the implementation to force RED.
+   >
+   > Show me the result and stop before candidate 3. Keep independent ORM history-deletion protection on the remaining Phase 13 checklist.
+
+5. **Accept candidate 2 as a regression test; start candidate 3.**
+   > Candidate 2 is accepted as a regression test confirming existing behavior.
+   >
+   > Proceed to candidate 3: admin single deletion of a never-moved application. Test the confirmation page and confirmed POST, verifying that the application and its initial history entry are removed.
+   >
+   > Show me the test, RED result, and what passing will prove. Stop for approval before implementing.
+
+6. **Approve candidate 3's test.**
+   > I approve candidate 3's test as written.
+   >
+   > Implement admin deletion for eligible never-moved applications, using the shared deletion rules. Only their initial history entry may be treated as removable; preserve all other protection checks.
+   >
+   > Show me the GREEN result and relevant regression results, then stop before implementing the remaining Phase 13 requirements.
+
+7. **Finish the remaining requirements, with forged-POST coverage.**
+   > Candidate 3 implements the intended behavior. Continue with the remaining Phase 13 requirements and ordinary tests.
+   >
+   > When adding independent history-deletion protection, ensure eligible application deletion still works through both model and QuerySet paths. Test that mixed deletions leave all applications and complete histories unchanged.
+   >
+   > Keep admin protections enforced on submitted requests as well as displayed controls. Verify forged POSTs cannot change an application's stage, candidate or job, or independently add, edit or delete history.
+   >
+   > Run the full suite, Ruff lint and format checks, and the migration check. Then provide exact browser verification steps and stop for my confirmation.
+   >
+   > Don't mark Phase 13 complete, commit, push, or begin Phase 14 yet.
+
+8. **Correction: finished applications have moved.**
+   > Before browser verification, clarify your statement that Delete is offered on finished applications. Under our rules, Hired, Rejected and Withdrawn applications have moved and must not offer Delete.
+   >
+   > Confirm that eligibility depends on having only the initial Applied history entry, not whether the job is open. If this was only a wording mistake, no code change is needed.
+   >
+   > Keep Phase 13 awaiting browser verification.
+
+9. **Add a closed-job regression test.**
+   > Thanks for clarifying. Add an ordinary regression test confirming that closing a job leaves its never-moved application eligible for deletion and that deleting it removes its initial history entry too.
+   >
+   > Run the relevant tests and report the result. Keep Phase 13 awaiting browser verification; don't mark it complete or commit yet.
+
+10. **A paste of the agent's own previous reply.** The message repeated the agent's report on the closed-job test, word for word, with no new instruction. The agent started a full-suite run to confirm the "should be 612" count. The user rejected that tool call and interrupted.
+
+11. **Browser checks passed; mark complete and propose CLAUDE.md.**
+    > All Phase 13 browser checks passed.
+    >
+    > Mark Phase 13's acceptance criteria complete. Review CLAUDE.md and propose any needed changes as a diff, limited to verified commands, structure and durable conventions. Keep it concise, around 70–80 lines.
+    >
+    > Don't commit, push or start Phase 14 yet.
+
+12. **Apply the CLAUDE.md diff and write this log.**
+    > I approve the CLAUDE.md diff. Apply it.
+    >
+    > Then append a session log to PROMPTS.md at the repo root, under today's date, newest entry at the top. Record every prompt I gave you this session, in order, including corrections. End with the outcome, deviations or follow-up questions, and anything that went sideways.
+    >
+    > Include the approved ProtectedError-as-RED exception, candidate 2 passing immediately as a regression test, and the corrected wording about closed jobs versus finished applications.
+    >
+    > Finally, show git status, git diff --stat including the new files, and the proposed Phase 13 commit message. Don't commit, push or begin Phase 14 yet.
+
+### Summary
+
+- **Outcome:**
+  - **Models (`hiring/models.py`):**
+    - **Shared delete path:** `Application.delete()` and `ApplicationQuerySet.delete()` both go through `delete_never_moved()`, in one transaction. If any selected application is in `Application.objects.moved()` (any history entry with an old stage), it refuses all of them with `ProtectedError("Applications that have changed stages can't be deleted.")`. Otherwise it removes the initial entries, then the applications.
+    - **History:** `StageHistoryEntry` model and QuerySet deletes always refuse. Only `delete_never_moved()` removes entries, through a private `_delete_initial_entries()`. `PROTECT` stays as a backstop.
+  - **Admin (`hiring/admin.py`):**
+    - **`ApplicationAdmin`:** uses the app's details form (with admin widgets). Candidate, job and stage are read-only, the history is shown as a read-only list, and there's no add. Saving writes only `applied_on`, `notes` and `updated_at`.
+    - **Delete pages:** `get_deleted_objects` stops listing initial entries as protected when no selected application has moved. It also always drops history from the missing-permission list, so a refusal lists the blocking entries.
+    - **`StageHistoryEntryAdmin`:** view-only, with no add, change or delete permission.
+  - **App:**
+    - **Delete page:** `/applications/<pk>/delete/` (`application_delete`, `application_confirm_delete.html`) uses GET to confirm and POST to delete. A moved application gets a "Can't delete application" page. `next` is validated, with the job's workspace as the default, and Cancel follows `next`.
+    - **Panel:** shows "Delete application…" only while history has no entry with an old stage. Its `next` is the job's workspace with `jobs`, `tab` and `q`.
+  - **Tests:** `hiring/tests/test_application_delete.py` has 31 tests:
+    - the three TDD tests
+    - model and QuerySet deletes, and a failure partway through leaving everything unchanged
+    - history refusals on every ORM path
+    - the app view and panel link
+    - edits not affecting eligibility, and a closed job not affecting eligibility
+    - admin single and bulk deletes for applications, candidates and jobs, including a successful bulk delete and a refused mixed bulk delete
+    - read-only admin fields, and forged admin POSTs against applications and history
+
+    Used-skill admin refusals were already covered in `test_skills.py`.
+  - **Checks:**
+    - The last full run had 611 passing, before the closed-job test was added. The closed-job test passed in its own file (31 passed). The full suite wasn't rerun after that, because the user stopped that run (prompt 10).
+    - Ruff check, Ruff format and `makemigrations --check` all passed.
+  - **Also:** Phase 13's acceptance criteria are ticked in the plan, and CLAUDE.md has three new deletion and admin convention lines.
+- **Deviations:**
+  - **Candidate 1's RED:** the test failed with `ProtectedError` from the existing `PROTECT`, not on an assertion. The agent flagged that this didn't strictly meet the tdd skill's RED definition. The user explicitly approved it as RED, because the failure was the very behavior under test and no scaffolding was missing, and told the agent not to change the test to force an assertion failure.
+  - **Candidate 2 wasn't a RED-to-GREEN cycle.** It passed on its first run, because candidate 1's code deletes only initial entries and `PROTECT` plus the transaction rollback already refused the moved application. As instructed, it's recorded as a regression test confirming existing behavior. To show the test catches the real mistake, the agent temporarily changed the code to delete all history first. The test then failed (`DID NOT RAISE ProtectedError`), and the agent reverted the change.
+  - **Candidate 3** needed scaffolding first: `NoReverseMatch` until `Application` was registered in admin. After that it was a genuine assertion RED ("Cannot delete application" page).
+  - **Candidate list:** the user's prompt suggested "admin bulk delete of a candidate with applications" as a candidate. The agent didn't propose it, because `PROTECT` already refuses it, so it couldn't go RED. It's covered by an ordinary test instead.
+  - **User additions:** a complete-history snapshot check for candidate 2, ordinary tests for the full admin bulk action, forged-POST coverage, and the closed-job regression test.
+- **Sideways:**
+  - **Wrong wording about finished applications:** the agent's report said Delete is offered on finished applications. That's wrong: Hired, Rejected and Withdrawn always involve a move, so they're never eligible. What it meant was that a never-moved application on a closed job is still deletable, because eligibility depends only on history, never on stage or job status. The user caught it. No code change was needed, the closed-job regression test was added, and CLAUDE.md now says eligibility never depends on stage or job status.
+  - **`pk__in` with model instances:** an early version of `Application.delete()` passed `[self]` to `pk__in`, which fails with "Field 'id' expected a number". The full suite caught it, and the call now passes a one-row QuerySet.
+  - **Formatting:** Ruff reformatted the new code twice during the session. There were no lint failures.
+  - **`-n 0`:** an attempted `pytest -n 0` failed because xdist isn't installed. The run was repeated without it.
+  - **Prompt 10:** when the user pasted the agent's own reply, the agent started a full-suite run unasked, and the user rejected it.
+
 ## 2026-11-01 — Phase 12: HTMX stage actions and application details
 
 ### Prompts
