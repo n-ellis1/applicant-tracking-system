@@ -28,6 +28,162 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 10: Workspace list: stage groups, tabs and search
+
+### Prompts
+
+1. **Start Phase 10 (`/implement`).**
+   > /implement @prd/applicant-tracking-system.md @plans/applicant-tracking-system.md implement Phase 10 only
+   >
+   > Read CLAUDE.md and follow the implement and tdd skills. Preserve the sidebar jobs= filter and all existing stage rules.
+   >
+   > Implement the planned application-list stage groups, Active/Finished/All tabs with counts, name/email search, and ordering by most recent stage change within each group.
+   >
+   > Keep tab and search in the URL through application selection, stage actions, refresh, and job close/reopen. Switching jobs resets tab/search but preserves jobs=.
+   >
+   > Propose the TDD candidates and wait for my approval before writing code. Keep navigation full-page for now; HTMX selection belongs to Phase 11.
+   >
+   > After automated checks pass, give me browser verification steps and wait for my confirmation. Don't mark the phase complete, commit, push, or start Phase 11 yet.
+
+2. **Approve both candidates, splitting candidate 1 and adding another job to candidate 2.**
+   > I approve both candidates. For candidate 1, use separate tests for pipeline group order and newest stage-change order within a group. Base recency on stage history, not application creation or general updated_at.
+   >
+   > For candidate 2, include another job's applications so the test proves counts belong only to the selected job.
+   >
+   > Keep all the ordinary URL-state and filtering tests you listed. Start with the first ordering test, show me the test and RED result, then stop for approval before implementing it.
+
+3. **Approve the group-order test, adding visible headings.**
+   > I approve the test. Give each group a visible stage heading and count as well as its accessible list label, and include a check for the visible headings.
+   >
+   > Implement the grouping, then show me the GREEN result and regression results. Stop before the within-group recency test.
+
+4. **Keep row badges off and start the recency test.**
+   > Yes, I agree. Keep the stage badges off individual rows since the group headings identify the stage.
+   >
+   > Write the within-group recency test next. Make creation order and candidate-name order differ from stage-change order, so only the latest history timestamp produces the correct result.
+   >
+   > Show me the test and RED result, then stop for approval before implementing the ordering.
+
+5. **Approve the recency test, with a tie-breaker.**
+   > I approve this test. Order applications within each group by their latest stage-history timestamp, newest first. Add a stable tie-breaker for equal timestamps.
+   >
+   > Show me the GREEN result and full regression results, then stop before the tab-count test.
+
+6. **Start the tab-count test.**
+   > Yes, proceed to the tab-count test. Include matching and nonmatching search results across active and finished stages, plus another job's applications. Counts must reflect the selected job and search, independently of the selected tab.
+   >
+   > Add a small ordinary regression test for equal-timestamp ordering later.
+   >
+   > Show me the tab-count test and RED result, then stop for approval before implementing it.
+
+7. **Approve the tab-count test and markup.**
+   > I approve this test and the proposed tab markup. Compute counts after filtering by job and search, but before applying the selected tab.
+   >
+   > Implement the tabs and counts, then show me the GREEN result and full regression results. If defaulting to Active changes earlier tests that expected finished applications without tab=all, show me the proposed test corrections before changing them.
+
+8. **Continue with ordinary work; candidate-detail links use `tab=all`.**
+   > Proceed with the ordinary work. Candidate-detail application links should explicitly use tab=all so the linked application appears in the list and can be highlighted. Keep Active as the default when no tab is supplied.
+   >
+   > Record this navigation clarification in the PRD and plan, and test a candidate-detail link to a finished application.
+   >
+   > Complete the remaining filtering, ordering, search, and URL-state tests. Preserve jobs= throughout, and reset only tab/q when switching jobs.
+   >
+   > Run all planned checks, then give me browser verification steps. Wait for my confirmation before marking Phase 10 complete, committing, pushing, or starting Phase 11.
+
+9. **Extend `tab=all` to the blocked-delete pages.**
+   > Yes, make application links on the candidate and job blocked-delete pages use tab=all too, so finished applications are listed and highlighted. Add focused ordinary coverage and record this alongside the candidate-detail navigation clarification.
+   >
+   > Run the affected tests and report the results. Don't mark Phase 10 complete or commit yet.
+
+10. **Browser checks passed; run the suite, mark complete and propose CLAUDE.md.**
+    > All Phase 10 browser checks passed, including grouping and recency ordering, tabs and counts, search, URL-state preservation, stage moves, close/reopen returns, sidebar behavior, finished-application links from candidate and blocked-delete pages, and narrow-screen layout.
+    >
+    > Run the full suite once after the final link changes and report the result. If it passes, mark Phase 10 complete.
+    >
+    > Show me any proposed CLAUDE.md updates, limited to concise, durable conventions verified in this phase. Keep the file within our 70-80-line target; if existing guidance already covers it, say so.
+    >
+    > Don't commit or start Phase 11 yet.
+
+11. **Correction: approve CLAUDE.md without the ordering line, check the line count, and write this log.**
+    > Approve the layout, URL-state, POST-form, tab=all, and return_url updates. Leave out the new list-ordering line; that detail is already in the PRD and tests.
+    >
+    > Before applying them, check why CLAUDE.md is now reported as 63 lines when Phase 9 reported 70. Explain whether that was a counting mistake or an actual file change, and preserve all approved guidance.
+    >
+    > Apply the approved updates and report the actual line count. Write this session log to PROMPTS.md according to its instructions, including the three RED-to-GREEN tests, navigation clarification, and browser checks.
+    >
+    > Show me the changed-file summary and proposed commit message before committing. Don't start Phase 11.
+
+### Summary
+
+- **Outcome:**
+  - **Application list (`_workspace` in `hiring/views.py`, `pipeline.html`):**
+    - **Groups:** one group per stage that has applications, in pipeline order. Each group has a visible `<h3>` with the stage label and a count badge, then a `<ul class="menu" aria-label="<Stage> applications">`. Rows no longer carry a stage badge.
+    - **Ordering:** within each group, applications are ordered by `Max("history__changed_at")`, newest first, with `-pk` (the newest application) breaking a tie.
+    - **Search:** `q`, trimmed, matches candidate first name, last name or email, ignoring case.
+    - **Tabs:** Active (the default and the fallback for unknown values), Finished and All, in a `role="tablist" aria-label="Application tabs"` group with `aria-selected`. Counts are computed after the job and search, before the tab.
+    - **Search form:** a GET form that submits with the button or Enter. It keeps `jobs` and a non-default `tab`.
+    - **Empty states:** "No active/finished applications…" or "No … applications match '…'." for an empty tab or search. "No applications for this job yet." still shows when the job has none.
+  - **URL state:**
+    - **Defaults left out:** a `_list_query()` helper always carries `jobs` but leaves out the defaults (the Active tab and an empty search). No existing `?jobs=…` link or redirect changed.
+    - **What keeps the state:** application links, tab links, sidebar filter links, the "Show all jobs" link, move form actions, the move redirect (which drops unknown or default values), a failed move's re-render, and close/reopen's `return_url`.
+    - **Switching jobs:** sidebar job links carry only `jobs`, so switching jobs resets the tab and search.
+  - **Navigation clarification (approved during this phase):** candidate-detail application links, and the application links on the candidate and job blocked-delete pages, use `?tab=all`, so a finished application is listed and highlighted. Without `tab`, the workspace still defaults to Active. The PRD's candidate-detail bullet and the plan's Phase 10 section record it, and the plan has a seventh Phase 10 acceptance criterion for it.
+  - **TDD, two candidates (three RED-to-GREEN tests):**
+    1. **Groups in pipeline order** (`test_list_groups_applications_by_stage_in_pipeline_order`): eight applications, one per stage, created and named in reverse pipeline order. Their stages were set through the real services, viewed with `?tab=all`. **RED** with `assert [] == [('Applied', ['applied@example.com']), ...]`, because the list was still flat. At my request, the visible-heading check (`group_headings` == each stage label with count 1) was added when I approved the test. Building `groups` from `Stage` made it **GREEN**.
+    2. **Newest stage change first within a group** (`test_list_orders_each_group_by_most_recent_stage_change_first`): Adams, Baker and Clark, created and named in that order, all at Screening. Their Screening entries were backdated to 3h, 1h and 2h ago, after setting every Applied entry to a day ago. Then Adams's notes were edited so his `updated_at` is the newest. Only latest-history order gives Baker, Clark, Adams. **RED** with name order (Adams, Baker, Clark). The `Max` annotation with the `-pk` tie-breaker made it **GREEN**.
+    3. **Tab counts reflect the job and search, not the tab** (`test_tab_counts_reflect_the_job_and_search_but_not_the_active_tab`): on the selected job, three applications match "lee" by last name, first name and email (two active, one finished), and three don't (one active, two finished). Another job has three matching applications. Each case is checked with no tab, Active, Finished and All, searching `LEE`. **RED** with `assert {} == {'Active': 3, 'Finished': 3, 'All': 6}`. Tabs, search and counts made it **GREEN**, expecting 3/3/6 unsearched and 2/1/3 searched in every case.
+  - **Ordinary tests** (all passed on first run once written):
+    - equal-timestamp tie-break (newest application first)
+    - each tab's groups, with the default and unknown values falling back to Active (5 cases)
+    - search matching first name, last name or email, ignoring case and trimming
+    - empty tab and search messages
+    - workspace links keeping `jobs`, `tab` and `q`, and switching jobs resetting the tab and search
+    - the hidden-job note's link keeping the tab and search
+    - move form actions and the redirect keeping the state
+    - the move redirect dropping unknown or default values
+    - a failed move keeping the tab and search
+    - a close/reopen round trip with the tab and search
+    - candidate-detail and blocked-delete-page links (2 cases) opening a finished application on the All tab, highlighted
+  - **Existing tests changed** (by my `tab=all` directive):
+    - `test_candidate_detail_link_opens_the_workspace_with_it_selected` now uses a Hired application and checks it's listed and highlighted on the All tab.
+    - `test_candidate_detail_lists_applications_with_links` (`test_applications.py`) expects `?tab=all` in the link.
+    - No test needed changing for the Active default.
+  - **Test totals:** 531 before Phase 10, 550 after. That's +3 (TDD), +14 (ordinary, counting parametrized cases) and +2 (blocked-delete links).
+  - **Automated checks:** 550 passed. `ruff check`, `ruff format --check` and `makemigrations --check` were clean. No migration was needed.
+  - **Browser checks (by me):** all passed. They covered:
+    - grouping and recency ordering
+    - tabs and counts
+    - search
+    - keeping the URL state
+    - stage moves
+    - close/reopen returns
+    - sidebar behavior
+    - finished-application links from candidate and blocked-delete pages
+    - the narrow-screen layout
+  - **Docs:**
+    - All seven Phase 10 acceptance criteria are ticked in the plan.
+    - CLAUDE.md's `pipeline.html` layout line mentions stage groups, tabs and search.
+    - Conventions now cover carrying `tab` and `q` without the defaults, sidebar job links resetting them, POST forms keeping `jobs`, `tab` and `q`, `tab=all` for links to possibly finished applications, and what `return_url` carries.
+    - It's 71 lines.
+- **Deviations:**
+  - **Candidate 1 split:** I asked for separate tests for group order and within-group recency, with recency based on stage history.
+  - **Other job in candidate 2:** I added another job's applications to the count test.
+  - **Visible headings:** when I approved the group-order test, I asked for visible stage headings with counts and a check for them.
+  - **Tie-break test:** I asked for an ordinary test of equal timestamps.
+  - **Finished-application links:** the agent raised that a finished application opened without `tab` wasn't listed. It recommended `tab=all` on candidate-detail links over leaving it to Phase 12, and I chose that. The agent then flagged that the blocked-delete pages had the same issue, and I extended the rule to them.
+  - **Defaults left out of URLs:** this was the agent's design choice, recorded in the plan. It kept every existing `?jobs=…` assertion valid. I didn't change it.
+  - **CLAUDE.md:** I dropped the proposed list-ordering convention because the PRD and tests already hold it.
+- **Sideways:**
+  - **Recency test, first draft:** before I saw it, the first run failed for the wrong reason. The initial Applied entries had real "now" timestamps, later than the backdated Screening moves, which can't happen in real use. The agent backdated the Applied entries a day and disclosed this when presenting the test. What the test asserts didn't change.
+  - **Search ahead of schedule:** search filtering was built during the tab-count cycle, because the counts needed it. Its own ordinary test came later.
+  - **Mechanical test repair:** the new stage-action test's form regex also caught the nav's logout form. It was limited to move forms before the test passed.
+  - **Ordinary tests not run RED:** they were written after the code, so they weren't seen failing first.
+  - **Line count misreport:** the agent reported CLAUDE.md as 63 lines using PowerShell's `Measure-Object -Line`, which skips blank lines. `wc -l` showed 70, and git showed no change since the Phase 9 commit. I caught the difference.
+  - **Formatter:** `ruff format` re-wrapped lines in `test_pipeline.py`, including two earlier helper lines. Nothing they assert changed.
+  - **Tool timeout:** the first combined test and full-suite run passed the shell's 120-second limit and finished in the background. Later runs used a longer timeout.
+  - **Outdated comment still left:** `add_application` in `test_pipeline.py` still says "Moving applications arrives in Phase 8".
+  - **Skill lookup:** `/implement` isn't a registered skill in this session, so the agent read `.claude/skills/implement/SKILL.md` directly.
+
 ## 2026-11-01 — Phase 9: Reopening finished applications and workspace job controls
 
 ### Prompts

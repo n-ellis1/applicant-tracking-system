@@ -11,7 +11,7 @@
           <p class="break-words"><strong>{{ candidate }}</strong> can't be deleted because they have applications, which carry hiring history.</p>
           <ul class="list-inside list-disc">
             {% for application in applications %}
-              <li class="break-words"><a href="{% url 'hiring:application_detail' application.pk %}" class="link">{{ application.job.title }}</a> ({{ application.get_stage_display }})</li>
+              <li class="break-words"><a href="{% url 'hiring:application_detail' application.pk %}?tab=all" class="link">{{ application.job.title }}</a> ({{ application.get_stage_display }})</li>
             {% endfor %}
           </ul>
           <div class="flex flex-wrap gap-2">

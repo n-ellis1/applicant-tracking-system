@@ -493,14 +493,20 @@ The application list groups the selected job's applications by stage in pipeline
 
 The tab and search live in the URL (`?tab=&q=`). Application selection, stage moves and close/reopen returns keep them. Switching jobs resets them, but keeps the Phase 7 sidebar filter (`jobs=`). Navigation is still full-page in this phase.
 
+**Navigation clarification (approved during this phase, 2026-11-01):**
+- Candidate-detail application links, and the application links on the candidate and job blocked-delete pages, open the workspace with `tab=all`, so a finished application appears in the list and is highlighted. Without a `tab`, the workspace still defaults to Active.
+- Workspace links always carry `jobs=`. They leave out the defaults (the Active tab and an empty search), so `tab` and `q` appear only when they change the view.
+- The sidebar filter links keep the tab and search, since changing the filter never changes the displayed view.
+
 ### Acceptance criteria
 
-- [ ] Groups appear in pipeline order, and within each group the most recent stage change comes first.
-- [ ] Active shows active stages, Finished shows Hired/Rejected/Withdrawn, All shows everything. Active is the default.
-- [ ] Tab counts reflect the job and search, independent of the active tab.
-- [ ] Search matches candidate first name, last name or email.
-- [ ] Tab and search survive selecting an application, a stage move, close/reopen, and a page refresh.
-- [ ] An unknown `tab` value falls back to Active.
+- [x] Groups appear in pipeline order, and within each group the most recent stage change comes first.
+- [x] Active shows active stages, Finished shows Hired/Rejected/Withdrawn, All shows everything. Active is the default.
+- [x] Tab counts reflect the job and search, independent of the active tab.
+- [x] Search matches candidate first name, last name or email.
+- [x] Tab and search survive selecting an application, a stage move, close/reopen, and a page refresh.
+- [x] An unknown `tab` value falls back to Active.
+- [x] Candidate-detail and blocked-delete-page application links open the workspace on the All tab, with a finished application listed and highlighted.
 
 ### Possible TDD candidates (not approved)
 

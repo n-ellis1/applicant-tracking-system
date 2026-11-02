@@ -327,7 +327,7 @@ def test_candidate_detail_lists_applications_with_links(logged_in, employee):
     content = response.content.decode()
     assert f'href="{add_url(candidate)}"' in content
     detail_url = reverse("hiring:application_detail", args=[application.pk])
-    assert f'href="{detail_url}"' in content
+    assert f'href="{detail_url}?tab=all"' in content
     assert "Data Analyst" in content
     assert "No applications yet." not in content
 

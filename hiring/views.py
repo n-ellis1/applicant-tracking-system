@@ -2,8 +2,7 @@ from urllib.parse import urlencode
 
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
-from django.db.models import Count, ProtectedError, Q
-from django.db.models.functions import Lower
+from django.db.models import Count, Max, ProtectedError, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -79,6 +78,9 @@ def _stage_actions(application, facts):
     return actions
 
 
+APPLICATION_TABS = [("active", "Active"), ("finished", "Finished"), ("all", "All")]
+
+
 def _workspace(request, job, selected=None, move_form=None):
     # job is None only on the landing page when no job is open.
     # The sidebar filter defaults to the job's status so its link is visible;
@@ -86,6 +88,10 @@ def _workspace(request, job, selected=None, move_form=None):
     jobs_filter = request.GET.get("jobs")
     if jobs_filter not in dict(JOB_STATUS_FILTERS):
         jobs_filter = job.status if job is not None else JobOpening.Status.OPEN
+    tab = request.GET.get("tab")
+    if tab not in dict(APPLICATION_TABS):
+        tab = "active"
+    q = request.GET.get("q", "").strip()
     # Filter links keep whatever is displayed, so switching never selects a
     # different job: on the landing page they target the landing job's URL.
     if selected is not None:
@@ -95,10 +101,17 @@ def _workspace(request, job, selected=None, move_form=None):
     else:
         filter_base = reverse("hiring:pipeline")
     jobs = JobOpening.objects.with_in_progress_count()
+    # Links that keep the displayed view keep the tab and search too.
+    list_query = urlencode(_list_query(jobs_filter, tab, q))
     context = {
         "job": job,
         "jobs_filter": jobs_filter,
-        "job_filters": JOB_STATUS_FILTERS,
+        "filter_links": [
+            (value, label, f"{filter_base}?{urlencode(_list_query(value, tab, q))}")
+            for value, label in JOB_STATUS_FILTERS
+        ],
+        "show_all_url": f"{filter_base}?{urlencode(_list_query('all', tab, q))}",
+        "list_query": list_query,
         "filter_base": filter_base,
         "open_jobs": [
             j
@@ -115,15 +128,51 @@ def _workspace(request, job, selected=None, move_form=None):
         "job_hidden": job is not None and jobs_filter not in ("all", job.status),
         "selected": selected,
         # Close and reopen return here: the displayed job or application with
-        # the current sidebar filter. Never the move URL a failed move renders.
-        "return_url": f"{filter_base}?{urlencode({'jobs': jobs_filter})}",
+        # the current sidebar filter, tab and search. Never the move URL a
+        # failed move renders.
+        "return_url": f"{filter_base}?{list_query}",
         "active_nav": "pipeline",
     }
     if job is not None:
-        # A simple list for now, by candidate name.
-        context["applications"] = job.applications.select_related("candidate").order_by(
-            Lower("candidate__last_name"), Lower("candidate__first_name"), "pk"
+        # Most recent stage change first, from history; the newest
+        # application breaks a tie.
+        applications = (
+            job.applications.select_related("candidate")
+            .annotate(last_stage_change=Max("history__changed_at"))
+            .order_by("-last_stage_change", "-pk")
         )
+        if q:
+            applications = applications.filter(
+                Q(candidate__first_name__icontains=q)
+                | Q(candidate__last_name__icontains=q)
+                | Q(candidate__email__icontains=q)
+            )
+        applications = list(applications)
+        # Tab counts reflect the job and search, before the tab is applied.
+        by_tab = {
+            "active": [a for a in applications if a.stage in ACTIVE_STAGES],
+            "finished": [a for a in applications if a.stage in FINAL_STAGES],
+            "all": applications,
+        }
+        context["tab"] = tab
+        context["q"] = q
+        context["tabs"] = [
+            {
+                "value": value,
+                "label": label,
+                "count": len(by_tab[value]),
+                "url": f"{filter_base}?{urlencode(_list_query(jobs_filter, value, q))}",
+            }
+            for value, label in APPLICATION_TABS
+        ]
+        # Tells an empty tab or search apart from a job with no applications.
+        context["job_has_applications"] = job.applications.exists()
+        # One group per stage that has applications, in pipeline order.
+        context["groups"] = [
+            {"stage": stage, "applications": members}
+            for stage in Stage
+            if (members := [a for a in by_tab[tab] if a.stage == stage])
+        ]
     if selected is not None:
         history = list(selected.history.select_related("changed_by"))
         context["history"] = history
@@ -138,6 +187,17 @@ def _workspace(request, job, selected=None, move_form=None):
                 for message in messages
             ]
     return render(request, "hiring/pipeline.html", context)
+
+
+def _list_query(jobs_filter, tab, q):
+    # Always carries the sidebar filter. The Active tab and an empty search
+    # are the defaults, so they're left out.
+    query = {"jobs": jobs_filter}
+    if tab != "active":
+        query["tab"] = tab
+    if q:
+        query["q"] = q
+    return query
 
 
 def pipeline(request):
@@ -339,11 +399,20 @@ def application_move(request, pk):
         except ValidationError as error:
             form.add_error(None, error)
         else:
-            # Back to the same workspace URL, keeping a valid sidebar filter.
+            # Back to the same workspace URL, keeping a valid sidebar filter,
+            # tab and search.
             url = reverse("hiring:application_detail", args=[pk])
+            query = {}
             jobs_filter = request.GET.get("jobs")
             if jobs_filter in dict(JOB_STATUS_FILTERS):
-                url += "?" + urlencode({"jobs": jobs_filter})
+                query["jobs"] = jobs_filter
+            tab = request.GET.get("tab")
+            if tab in dict(APPLICATION_TABS) and tab != "active":
+                query["tab"] = tab
+            if q := request.GET.get("q", "").strip():
+                query["q"] = q
+            if query:
+                url += "?" + urlencode(query)
             return redirect(url)
     # The move changed nothing; show why, with actions for the current stage.
     return _workspace(request, application.job, application, move_form=form)

@@ -2,7 +2,7 @@ import html
 import re
 from datetime import timedelta
 from itertools import count
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import pytest
 from django.contrib.auth.models import User
@@ -412,14 +412,41 @@ def test_candidate_detail_link_opens_the_workspace_with_it_selected(
 ):
     candidate = make_candidate()
     application = record(candidate, make_job(), employee)
+    # A finished application, which the default Active tab wouldn't list.
+    services.move_application(application, Stage.HIRED, changed_by=employee)
 
     detail = employee_client.get(
         reverse("hiring:candidate_detail", args=[candidate.pk])
     ).content.decode()
-    assert f'href="{app_url(application)}"' in detail
+    link = f"{app_url(application)}?tab=all"
+    assert f'href="{link}"' in detail
 
-    content = employee_client.get(app_url(application)).content.decode()
-    assert f'href="{app_url(application)}?jobs=open" aria-current="true"' in content
+    response = employee_client.get(link)
+    assert response.context["tab"] == "all"
+    assert response.context["selected"] == application
+    content = html.unescape(response.content.decode())
+    highlighted = f"{app_url(application)}?jobs=open&tab=all"
+    assert f'href="{highlighted}" aria-current="true"' in content
+
+
+@pytest.mark.parametrize("page", ["candidate_delete", "job_delete"])
+def test_blocked_delete_page_links_open_the_workspace_on_the_all_tab(
+    employee_client, employee, page
+):
+    application = record(make_candidate(), make_job(), employee)
+    # A finished application, which the default Active tab wouldn't list.
+    services.move_application(application, Stage.REJECTED, changed_by=employee)
+    owner = application.candidate if page == "candidate_delete" else application.job
+
+    blocked = employee_client.get(reverse(f"hiring:{page}", args=[owner.pk]))
+    link = f"{app_url(application)}?tab=all"
+    assert f'href="{link}"' in blocked.content.decode()
+
+    response = employee_client.get(link)
+    assert response.context["selected"] == application
+    content = html.unescape(response.content.decode())
+    highlighted = f"{app_url(application)}?jobs=open&tab=all"
+    assert f'href="{highlighted}" aria-current="true"' in content
 
 
 # Real counts on the other pages
@@ -747,3 +774,391 @@ def test_header_reopen_leaves_finished_applications_finished(employee_client, em
     # Reopening the job makes reopening the application possible again.
     page = html.unescape(employee_client.get(here).content.decode())
     assert "Reopen to Applied" in page
+
+
+# Application list: stage groups, tabs and search
+
+
+def list_groups(content):
+    """(stage label, [candidate emails]) for each stage group, in page order."""
+    groups = re.findall(
+        r'<ul class="menu[^"]*" aria-label="([\w ]+) applications">(.*?)</ul>',
+        content,
+        re.DOTALL,
+    )
+    return [(label, re.findall(r"[\w.]+@example\.com", body)) for label, body in groups]
+
+
+def group_headings(content):
+    """(stage label, count) for each stage group's visible heading, in order."""
+    return [
+        (label, int(number))
+        for label, number in re.findall(
+            r'<h3 class="[^"]*">\s*([\w ]+?)\s*'
+            r'<span class="badge[^"]*">(\d+)</span>\s*</h3>',
+            content,
+        )
+    ]
+
+
+def test_list_groups_applications_by_stage_in_pipeline_order(employee_client, employee):
+    job = make_job(title="Data Analyst")
+    # Created in reverse pipeline order, with names in reverse pipeline order
+    # too, so neither creation order nor name order matches the pipeline.
+    stages = list(reversed(Stage))
+    for letter, stage in zip("ABCDEFGH", stages, strict=True):
+        candidate = make_candidate(
+            first_name=letter, last_name=letter, email=f"{stage}@example.com"
+        )
+        application = record(candidate, job, employee)
+        if stage != Stage.APPLIED:
+            services.move_application(application, stage, changed_by=employee)
+
+    content = employee_client.get(f"{job_url(job)}?tab=all").content.decode()
+
+    assert list_groups(content) == [
+        (stage.label, [f"{stage}@example.com"]) for stage in Stage
+    ]
+    assert group_headings(content) == [(stage.label, 1) for stage in Stage]
+
+
+def test_list_orders_each_group_by_most_recent_stage_change_first(
+    employee_client, employee
+):
+    job = make_job(title="Data Analyst")
+    # Created, and named, in the order Adams, Baker, Clark.
+    adams, baker, clark = (
+        record(
+            make_candidate(last_name=name, email=f"{name.lower()}@example.com"),
+            job,
+            employee,
+        )
+        for name in ["Adams", "Baker", "Clark"]
+    )
+    now = timezone.now()
+    # All applied a day ago, so history timestamps run forward as in real use.
+    StageHistoryEntry.objects.update(changed_at=now - timedelta(days=1))
+    # Baker moved to Screening most recently, then Clark, then Adams.
+    for application, hours_ago in [(baker, 1), (clark, 2), (adams, 3)]:
+        services.move_application(application, Stage.SCREENING, changed_by=employee)
+        application.history.filter(new_stage=Stage.SCREENING).update(
+            changed_at=now - timedelta(hours=hours_ago)
+        )
+    # Editing notes isn't a stage change: Adams is updated last but moved first.
+    adams.refresh_from_db()
+    adams.notes = "Strong portfolio."
+    adams.save()
+
+    content = employee_client.get(job_url(job)).content.decode()
+
+    assert list_groups(content) == [
+        (
+            "Screening",
+            ["baker@example.com", "clark@example.com", "adams@example.com"],
+        )
+    ]
+
+
+def tab_counts(content):
+    """{tab label: count} from the application list's tabs."""
+    tablist = re.search(
+        r'<div role="tablist" aria-label="Application tabs"[^>]*>(.*?)</div>',
+        content,
+        re.DOTALL,
+    )
+    if tablist is None:
+        return {}
+    return {
+        label: int(number)
+        for label, number in re.findall(
+            r'role="tab"[^>]*>\s*(\w+)\s*<span class="badge[^"]*">(\d+)</span>',
+            tablist.group(1),
+        )
+    }
+
+
+def apply_at(stage, candidate, job, employee):
+    """Record an application through the services and move it to stage."""
+    application = record(candidate, job, employee)
+    if stage != Stage.APPLIED:
+        services.move_application(application, stage, changed_by=employee)
+    return application
+
+
+def test_tab_counts_reflect_the_job_and_search_but_not_the_active_tab(
+    employee_client, employee
+):
+    job = make_job(title="Data Analyst")
+    other_job = make_job(title="Backend Developer")
+    # Matching "lee" by last name, first name and email.
+    ann = make_candidate(first_name="Ann", last_name="Lee", email="ann@example.com")
+    leena = make_candidate(
+        first_name="Leena", last_name="Park", email="lpark@example.com"
+    )
+    kim = make_candidate(
+        first_name="Kim", last_name="Ross", email="kim.lee@example.com"
+    )
+    apply_at(Stage.APPLIED, ann, job, employee)
+    apply_at(Stage.INTERVIEW, leena, job, employee)
+    apply_at(Stage.REJECTED, kim, job, employee)
+    # Not matching "lee".
+    for stage, name in [
+        (Stage.SCREENING, "Hart"),
+        (Stage.HIRED, "Diaz"),
+        (Stage.WITHDRAWN, "Fox"),
+    ]:
+        candidate = make_candidate(last_name=name, email=f"{name.lower()}@example.com")
+        apply_at(stage, candidate, job, employee)
+    # Another job's applications, matching "lee" too, never count here.
+    eve = make_candidate(first_name="Eve", last_name="Lee", email="eve@example.com")
+    apply_at(Stage.SCREENING, ann, other_job, employee)
+    apply_at(Stage.HIRED, leena, other_job, employee)
+    apply_at(Stage.OFFER, eve, other_job, employee)
+
+    for tab in [None, "active", "finished", "all"]:
+        tab_query = {"tab": tab} if tab else {}
+        unsearched = employee_client.get(f"{job_url(job)}?{urlencode(tab_query)}")
+        searched = employee_client.get(
+            f"{job_url(job)}?{urlencode(tab_query | {'q': 'LEE'})}"
+        )
+
+        assert tab_counts(unsearched.content.decode()) == {
+            "Active": 3,
+            "Finished": 3,
+            "All": 6,
+        }, tab
+        assert tab_counts(searched.content.decode()) == {
+            "Active": 2,
+            "Finished": 1,
+            "All": 3,
+        }, tab
+
+
+def test_equal_stage_change_times_list_the_newest_application_first(
+    employee_client, employee
+):
+    job = make_job(title="Data Analyst")
+    older = record(make_candidate(email="older@example.com"), job, employee)
+    newer = record(make_candidate(email="newer@example.com"), job, employee)
+    # A tie on the latest stage change falls back to the newest application.
+    StageHistoryEntry.objects.update(changed_at=timezone.now() - timedelta(hours=1))
+    assert newer.pk > older.pk
+
+    content = employee_client.get(job_url(job)).content.decode()
+
+    assert list_groups(content) == [
+        ("Applied", ["newer@example.com", "older@example.com"])
+    ]
+
+
+def stage_job(employee):
+    """A job with one application at each of Applied, Offer, Hired and Rejected."""
+    job = make_job(title="Data Analyst")
+    for stage in [Stage.APPLIED, Stage.OFFER, Stage.HIRED, Stage.REJECTED]:
+        candidate = make_candidate(email=f"{stage}@example.com")
+        apply_at(stage, candidate, job, employee)
+    return job
+
+
+@pytest.mark.parametrize(
+    ("query", "tab", "labels"),
+    [
+        ("", "active", ["Applied", "Offer"]),
+        ("?tab=active", "active", ["Applied", "Offer"]),
+        ("?tab=finished", "finished", ["Hired", "Rejected"]),
+        ("?tab=all", "all", ["Applied", "Offer", "Hired", "Rejected"]),
+        ("?tab=bogus", "active", ["Applied", "Offer"]),
+    ],
+    ids=["default", "active", "finished", "all", "unknown"],
+)
+def test_tabs_show_their_stage_groups_and_default_to_active(
+    employee_client, employee, query, tab, labels
+):
+    job = stage_job(employee)
+
+    response = employee_client.get(f"{job_url(job)}{query}")
+
+    assert response.context["tab"] == tab
+    content = response.content.decode()
+    assert [label for label, _ in list_groups(content)] == labels
+    assert re.search(
+        rf'role="tab"[^>]*class="[^"]*tab-active[^"]*"[^>]*>\s*{tab.capitalize()}\b',
+        content,
+    )
+    assert "bogus" not in content
+
+
+def test_search_matches_first_name_last_name_or_email_ignoring_case(
+    employee_client, employee
+):
+    job = make_job(title="Data Analyst")
+    for first, last, email in [
+        ("Ann", "Smith", "ann@example.com"),
+        ("Bo", "Annis", "bo@example.com"),
+        ("Cy", "Hart", "cy.ann@example.com"),
+        ("Di", "Fox", "di@example.com"),
+    ]:
+        candidate = make_candidate(first_name=first, last_name=last, email=email)
+        record(candidate, job, employee)
+
+    response = employee_client.get(f"{job_url(job)}?q=++ANN++")
+
+    assert response.context["q"] == "ANN"
+    _, emails = list_groups(response.content.decode())[0]
+    assert sorted(emails) == ["ann@example.com", "bo@example.com", "cy.ann@example.com"]
+    # The search box shows the cleaned search.
+    assert 'name="q" value="ANN"' in response.content.decode()
+
+
+def test_empty_tab_or_search_says_so_without_claiming_the_job_is_empty(
+    employee_client, employee
+):
+    job = make_job(title="Data Analyst")
+    record(make_candidate(), job, employee)
+
+    finished = employee_client.get(f"{job_url(job)}?tab=finished").content.decode()
+    searched = employee_client.get(f"{job_url(job)}?q=zzz").content.decode()
+
+    assert "No finished applications for this job." in finished
+    assert "No active applications match “zzz”." in searched
+    for content in [finished, searched]:
+        assert list_groups(content) == []
+        assert "No applications for this job yet." not in content
+        # The tabs and search stay available to change the view back.
+        assert tab_counts(content)["All"] == (1 if content is finished else 0)
+
+
+def move_url(application):
+    return reverse("hiring:application_move", args=[application.pk])
+
+
+def test_workspace_links_keep_the_filter_tab_and_search(employee_client, employee):
+    job = make_job(title="Data Analyst")
+    other_job = make_job(title="Backend Developer")
+    selected = apply_at(Stage.REJECTED, make_candidate(last_name="Lee"), job, employee)
+    neighbour = apply_at(
+        Stage.HIRED,
+        make_candidate(last_name="Leeds", email="leeds@example.com"),
+        job,
+        employee,
+    )
+    state = "jobs=all&tab=finished&q=lee"
+    here = f"{app_url(selected)}?{state}"
+
+    response = employee_client.get(here)
+
+    # Refreshing the URL renders the same view.
+    assert response.context["selected"] == selected
+    assert response.context["tab"] == "finished"
+    assert response.context["q"] == "lee"
+    content = html.unescape(response.content.decode())
+    # Selecting an application keeps the filter, tab and search.
+    assert f'href="{here}" aria-current="true"' in content
+    assert f'href="{app_url(neighbour)}?{state}"' in content
+    # Tabs keep the filter and search; Active is the default, so it's left out.
+    tab_links = re.findall(r'<a role="tab" href="([^"]+)"', content)
+    assert tab_links == [
+        f"{app_url(selected)}?jobs=all&q=lee",
+        f"{app_url(selected)}?jobs=all&tab=finished&q=lee",
+        f"{app_url(selected)}?jobs=all&tab=all&q=lee",
+    ]
+    # The search form keeps the filter and tab.
+    assert f'action="{app_url(selected)}" role="search"' in content
+    assert 'name="jobs" value="all"' in content
+    assert 'name="tab" value="finished"' in content
+    # Sidebar filter links keep the displayed view, tab and search.
+    assert filter_links(content) == [
+        (f"{app_url(selected)}?jobs={value}&tab=finished&q=lee", label)
+        for value, label in [("open", "Open"), ("closed", "Closed"), ("all", "All")]
+    ]
+    # Switching jobs resets the tab and search but keeps the filter.
+    assert f'href="{job_url(job)}?jobs=all" aria-current="page"' in content
+    assert f'href="{job_url(other_job)}?jobs=all"' in content
+    # Close returns here.
+    close_url = reverse("hiring:job_close", args=[job.pk])
+    assert close_link(response.content.decode()) == f"{close_url}?next={quote(here)}"
+
+
+def test_hidden_job_note_keeps_the_tab_and_search(employee_client, employee):
+    job = make_job(title="Data Analyst")
+    application = record(make_candidate(), job, employee)
+
+    content = employee_client.get(
+        f"{app_url(application)}?jobs=closed&tab=all&q=jane"
+    ).content.decode()
+
+    assert html.unescape(show_all_link(content)) == (
+        f"{app_url(application)}?jobs=all&tab=all&q=jane"
+    )
+
+
+def test_stage_actions_post_to_and_return_to_the_same_filter_tab_and_search(
+    employee_client, employee
+):
+    job = make_job(title="Data Analyst")
+    application = record(make_candidate(last_name="Lee"), job, employee)
+    state = "jobs=all&tab=all&q=lee"
+
+    content = html.unescape(
+        employee_client.get(f"{app_url(application)}?{state}").content.decode()
+    )
+    actions = re.findall(r'<form method="post" action="([^"]+)"', content)
+    moves = {action for action in actions if action.startswith(move_url(application))}
+    # Advance, Reject, Mark withdrawn and the other moves all keep the state.
+    assert len([a for a in actions if a in moves]) > 3
+    assert moves == {f"{move_url(application)}?{state}"}
+
+    response = employee_client.post(
+        f"{move_url(application)}?{state}", {"stage": Stage.SCREENING}
+    )
+
+    assert response.status_code == 302
+    assert response.url == f"{app_url(application)}?{state}"
+
+
+def test_move_redirect_drops_unknown_values_and_defaults(employee_client, employee):
+    job = make_job(title="Data Analyst")
+    application = record(make_candidate(), job, employee)
+
+    response = employee_client.post(
+        f"{move_url(application)}?jobs=bogus&tab=active&q=++",
+        {"stage": Stage.SCREENING},
+    )
+    assert response.url == app_url(application)
+
+    response = employee_client.post(
+        f"{move_url(application)}?tab=bogus&q=+jane+", {"stage": Stage.INTERVIEW}
+    )
+    assert response.url == f"{app_url(application)}?q=jane"
+
+
+def test_failed_move_keeps_the_tab_and_search(employee_client, employee):
+    job = make_job(title="Data Analyst")
+    application = record(make_candidate(), job, employee)
+
+    response = employee_client.post(
+        f"{move_url(application)}?jobs=all&tab=all&q=jane", {"stage": "bogus"}
+    )
+
+    assert response.status_code == 200
+    assert response.context["tab"] == "all"
+    assert response.context["q"] == "jane"
+    target = f"{app_url(application)}?jobs=all&tab=all&q=jane"
+    close_url = reverse("hiring:job_close", args=[job.pk])
+    assert close_link(response.content.decode()) == f"{close_url}?next={quote(target)}"
+
+
+def test_close_and_reopen_return_with_the_tab_and_search(employee_client, employee):
+    job = make_job(title="Data Analyst")
+    application = record(make_candidate(), job, employee)
+    here = f"{app_url(application)}?jobs=all&tab=all&q=jane"
+
+    page = employee_client.get(here).content.decode()
+    close_url = reverse("hiring:job_close", args=[job.pk])
+    assert close_link(page) == f"{close_url}?next={quote(here)}"
+    assert employee_client.post(close_url, {"next": here}).url == here
+
+    page = employee_client.get(here).content.decode()
+    action, next_url = reopen_form(page)
+    assert next_url == here
+    assert employee_client.post(action, {"next": next_url}).url == here

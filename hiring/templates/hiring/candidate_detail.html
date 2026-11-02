@@ -63,7 +63,8 @@
           <ul class="flex flex-col gap-2">
             {% for application in applications %}
               <li class="flex flex-wrap items-center justify-between gap-2 rounded-box border border-base-300 bg-base-100 p-3">
-                <a href="{% url 'hiring:application_detail' application.pk %}" class="link min-w-0 break-words">{{ application.job.title }}</a>
+                {# The All tab lists finished applications too, so the link can highlight it. #}
+                <a href="{% url 'hiring:application_detail' application.pk %}?tab=all" class="link min-w-0 break-words">{{ application.job.title }}</a>
                 <span class="flex flex-wrap items-center gap-2 text-sm">
                   <span class="badge badge-outline">{{ application.get_stage_display }}</span>
                   <span class="text-base-content/70">Applied {{ application.applied_on|date:"M j, Y" }}</span>
