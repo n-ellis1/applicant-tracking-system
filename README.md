@@ -33,6 +33,21 @@ To build the CSS once without the server (for example before running `runserver`
 uv run python manage.py tailwind build
 ```
 
+## Demo data
+
+For development and demos only, `seed_demo` fills an empty database with fictional data:
+
+```sh
+uv run python manage.py migrate
+uv run python manage.py seed_demo
+```
+
+It creates skills, candidates (some with several applications), open jobs and a closed job that still has in-progress applications, and two demo employee accounts (not staff, so no admin access). Applications are recorded and moved through the same services the app uses. They include an application reopened from Withdrawn that can't skip stages, Hired and Rejected applications that can be reopened, and a never-moved application that can be deleted. Applied-on dates are in the past; stage history shows the time the command ran.
+
+The demo usernames and their shared, development-only password are printed when seeding succeeds. Never run it on a real deployment.
+
+It refuses to run, changing nothing, if any skill, job, candidate or application exists, or if a demo username is taken. There's no reset option. If any step fails, nothing is saved.
+
 ## Checks
 
 ```sh

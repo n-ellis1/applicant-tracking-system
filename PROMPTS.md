@@ -28,6 +28,110 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 14: Demo seed data and final polish
+
+### Prompts
+
+1. **Start Phase 14 (`/implement`).**
+   > /implement @prd/applicant-tracking-system.md @plans/applicant-tracking-system.md implement Phase 14 only
+   >
+   > Read CLAUDE.md and follow the implement and tdd skills.
+   >
+   > Build the demo seed command and perform the final polish described in Phase 14. Create applications and stage history through the real services. Refuse to seed if any hiring data exists, provide no reset option, and create non-admin demo employees with a development-only password printed in the terminal.
+   >
+   > Before implementation, discuss the plan’s timestamp decision and recommend whether optional service timestamps are needed.
+   >
+   > Propose at most three TDD candidates and wait for approval before writing code. Preserve my existing database; use a separate fresh database for seed verification.
+   >
+   > After implementation, run the full suite and required checks, then give me the final browser checklist. Don't mark the phase complete, commit or push before my browser verification and review.
+
+2. **Approve no timestamps and the single refusal candidate; add collision and rollback tests.**
+   > I approve the no-timestamp decision and the single parametrized TDD candidate.
+   >
+   > Use run-time history timestamps and past applied-on dates. Keep my existing database untouched and use the separate scratch database for seed and browser verification.
+   >
+   > Include ordinary tests for demo-username collisions leaving all data unchanged, and for a failure during seeding rolling back all created records, including users.
+   >
+   > Start with the approved refusal test. Show me the test and RED result, then stop for approval before implementation. Add only the scaffolding needed to reach an assertion failure if the missing command initially prevents the test from running.
+
+3. **Correction: strengthen "changes nothing" to field-value snapshots.**
+   > I approve the refusal behavior and the empty-command scaffolding.
+   >
+   > Before implementation, strengthen “changes nothing” by comparing before/after field-value snapshots of the six models, rather than counts alone. Don't print user password values.
+   >
+   > Rerun and show the strengthened test’s RED result. If it still fails because no CommandError is raised, proceed with implementing the refusal guard.
+   >
+   > Show me GREEN and relevant regression results, then stop before building the remaining seed data and Phase 14 work.
+
+4. **Accept the guard; build the rest of Phase 14.**
+   > The refusal guard implements the intended behavior. Continue with the remaining Phase 14 work as approved.
+   >
+   > Build the demo scenarios through the real services, using run-time history timestamps and past applied-on dates. Add the username-collision and transaction-rollback tests, including rollback of created users. Print demo credentials only after successful seeding.
+   >
+   > Preserve my existing database and verify seeding against a separate fresh scratch database. Document the command in README and address any final polish issues.
+   >
+   > Run the full suite, Ruff lint and format checks, and the migration check. Then provide exact commands for opening the scratch database in the browser and the complete final browser checklist.
+   >
+   > Stop for my browser verification. Don't mark Phase 14 complete, commit or push yet.
+
+5. **Browser checks passed; mark complete and propose CLAUDE.md.**
+   > All Phase 14 browser checks passed, and I approve the current interface.
+   >
+   > Mark Phase 14’s acceptance criteria complete. Review CLAUDE.md and propose a concise diff for the verified seed_demo command and any new durable conventions. Don't apply the diff until I approve it.
+   >
+   > Don't commit or push yet.
+
+6. **Apply the CLAUDE.md diff.**
+   > I approve the CLAUDE.md diff; apply it
+
+7. **Write this log and show the review.** The prompt opened by saying the previous prompt had already requested the session log. Prompt 6 only asked to apply the diff, so the agent hadn't written the log under the never-unprompted rule.
+   > My previous prompt already requested the session log. Please complete it now:
+   >
+   > Append this session’s log to PROMPTS.md under today's date, newest entry at the top. Record my prompts in order, including corrections, and summarize the outcome, deviations, and anything that went sideways. Include the no-timestamp decision, strengthened refusal test, separate scratch-database verification, and my browser approval.
+   >
+   > Then show git status, git diff --stat including new files, and the proposed Phase 14 commit message. Confirm temporary settings and scratch databases aren't included.
+   >
+   > Don't commit or push yet.
+
+### Summary
+
+- **Outcome:**
+  - **No-timestamp decision:** the agent recommended against optional service timestamps. A caller-supplied time could put history out of order and silently break `stage_facts()`, which reads the latest entry. `auto_now` fields and `closed_at` would still show the run time anyway. The user approved: seeded history uses run-time timestamps, and applications get past applied-on dates through the existing `applied_on` argument.
+  - **Command (`hiring/management/commands/seed_demo.py`):**
+    - It refuses with a `CommandError` if any skill, job, candidate or application exists, or if a demo username (`alex.demo`, `sam.demo`) is taken.
+    - Otherwise it creates everything in one `transaction.atomic()`: 2 non-staff demo employees, 10 skills, 6 jobs (Marketing Intern closed), 13 candidates and 17 applications.
+    - Applications are recorded, moved and closed only through `create_application()`, `move_application()` and `close_job()`.
+    - Scenarios:
+      - a no-skip application reopened from Withdrawn (Maya Chen)
+      - reopenable Hired (Jordan Rivera) and Rejected (Priya Patel) applications
+      - a restricted application Hired and reopened to Offer (Aisha Bello)
+      - a closed job with two in-progress applications and a Hired one that can't reopen
+      - candidates with several applications
+      - a never-moved, deletable application next to one moved back to Applied
+      - a job with no applications
+    - Credentials and the "DEVELOPMENT ONLY" warning are printed only after success.
+  - **TDD:** one approved candidate, the parametrized refusal test (skill, job, candidate and application cases). After prompt 3, "changes nothing" compares field-value snapshots of Skill, JobOpening, Candidate, Application, StageHistoryEntry and User. User passwords are compared separately as a boolean, so a failure never prints them. RED was `DID NOT RAISE CommandError` before and after the strengthening. GREEN came from the existence guard alone, and the full suite passed (616).
+  - **Ordinary tests (`hiring/tests/test_seed_demo.py`, 20 in total):**
+    - a username collision leaves everything unchanged
+    - a failure at the last step (monkeypatched `close_job`) rolls back everything, including users, and never prints the password
+    - each scenario, checked through `stage_facts()` and `check_move()`
+    - stage matches the latest history entry, and every entry is by a demo employee
+    - applied-on dates are in the past, the accounts are active and not staff, and a second run refuses
+  - **Scratch-database verification:** a settings module in the session scratchpad imports `config.settings` and points `DATABASES` at a scratch SQLite file. Against it, `migrate` + `seed_demo` succeeded, a second run refused with exit code 1, and a smoke script got 200 from 98 hiring pages as a demo employee (`/admin/` redirected). The project's `db.sqlite3` size and modified time were unchanged. The user ran the browser checklist against the same scratch database.
+  - **Polish:** no template changes were needed. Overflow handling from earlier phases held up, and the user's browser pass approved the interface.
+  - **Docs:** README has a "Demo data" section. CLAUDE.md gained the `seed_demo` command, its layout entry and a seed convention. All Phase 14 boxes are ticked in the plan.
+  - **Checks:** 632 tests passed. Ruff lint and format, and `makemigrations --check`, are clean.
+  - **Browser approval:** the user confirmed all Phase 14 browser checks passed and approved the current interface.
+- **Deviations:**
+  - The user strengthened the refusal test from counts to field-value snapshots, with passwords never printed.
+  - The user added the username-collision and rollback tests as ordinary tests, beyond the agent's proposal.
+  - The user asked that credentials print only after successful seeding.
+- **Sideways:**
+  - The agent added the empty-command scaffolding before first running the test without it, against the instruction to add scaffolding only if the missing command blocked the test. It disclosed this with the RED result: an unknown command also raises `CommandError` and would have failed only on the message match. The user approved the scaffolding.
+  - The full suite now takes about 2.5–3 minutes, past the default 120-second tool timeout. The first run was moved to the background, and the agent made a pointless placeholder `echo` call while waiting. Later runs used a longer timeout.
+  - Piping the smoke script into `manage.py shell` broke on the interactive console's indentation rules. It was rerun with `exec()`.
+  - Prompt 7 said the previous prompt had requested the log. It hadn't, so the log was written only at prompt 7.
+
 ## 2026-11-01 — Phase 13: Application deletion and admin protections
 
 ### Prompts

@@ -654,12 +654,12 @@ Then a final pass over the whole PRD manual checklist: dark-theme contrast on bu
 
 ### Acceptance criteria
 
-- [ ] `seed_demo` on an empty database creates every scenario listed in the PRD, through the services.
-- [ ] `seed_demo` refuses to run and changes nothing if any candidate, job, skill or application exists.
-- [ ] Demo accounts aren't staff or superusers, and the password is printed with a development-only warning.
-- [ ] Seeded history passes the same consistency check as everything else (stage equals the latest history entry).
-- [ ] Every item on the PRD's manual browser checklist passes.
-- [ ] README documents how to run `seed_demo`.
+- [x] `seed_demo` on an empty database creates every scenario listed in the PRD, through the services.
+- [x] `seed_demo` refuses to run and changes nothing if any candidate, job, skill or application exists.
+- [x] Demo accounts aren't staff or superusers, and the password is printed with a development-only warning.
+- [x] Seeded history passes the same consistency check as everything else (stage equals the latest history entry).
+- [x] Every item on the PRD's manual browser checklist passes.
+- [x] README documents how to run `seed_demo`.
 
 ### Possible TDD candidates (not approved)
 

@@ -25,12 +25,14 @@ Internal Django applicant tracking system where hiring staff track candidates, j
 - Tests: `uv run pytest`
 - Lint / format: `uv run ruff check .` and `uv run ruff format --check .` (apply with `uv run ruff format .`)
 - Migrations check: `uv run python manage.py makemigrations --check`
+- Demo data (empty database only, development only): `uv run python manage.py seed_demo`
 
 ## Project layout
 - `config/`: settings and root URLs (`/admin/`, `/accounts/` auth views, then `hiring.urls`).
 - `hiring/`: the only app. URL namespace `hiring`; templates in `hiring/templates/hiring/`; tests in `hiring/tests/test_*.py`, with shared fixtures in `hiring/tests/conftest.py` and data builders in `hiring/tests/helpers.py`.
 - `hiring/stages.py`: the stage list, the active and final groups, and `check_move()`, which takes the history facts as keywords and returns a `MoveCheck(allowed, reason)`. No database access.
 - `hiring/services.py`: application creation, stage moves (`move_application`), job close/reopen operations, and `stage_facts()`, which derives the rule facts from history. Views use these shared operations.
+- `hiring/management/commands/seed_demo.py`: fictional demo data, with the scenarios as data tables at the top of the module.
 - `hiring/templates/hiring/pipeline.html`: workspace assembled from shared sidebar, controls, list, and panel partials. `_workspace` renders full pages or `_selection.html` from the same context.
 - `_selection.html` is the one HTMX response for selection, stage moves and details saves: `_application_panel.html` (which owns `#application-panel`) plus out-of-band list, tabs, job controls, sidebar filter and `_sidebar_jobs.html` counts.
 - `templates/`: `base.html`, nav partials `_nav.html` / `_nav_links.html`, `registration/login.html`.
@@ -71,6 +73,7 @@ Internal Django applicant tracking system where hiring staff track candidates, j
 - Never edit or regenerate a migration that has been applied or committed; add a new migration.
 - List pages read search and filter from GET, show 25 per page, and fall back to the default filter for unknown values. Page links carry the cleaned search and filter values.
 - Tests use pytest functions with pytest-django's `client` and `db` fixtures, not `TestCase` classes.
+- `seed_demo` creates applications, moves and job closes only through `services`, never by writing `stage` or history directly, and relies on run-time history timestamps (services take no timestamp). It refuses if any skill, job, candidate or application exists or a demo username is taken, runs in one transaction, has no reset option, and prints the development-only credentials only after it succeeds. New scenarios go in its data tables, with a test in `hiring/tests/test_seed_demo.py`.
 - On Windows, `uv run python manage.py tailwind config` needs `PYTHONIOENCODING=utf-8` (it crashes printing emoji otherwise).
 
 ## References
