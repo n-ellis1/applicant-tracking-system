@@ -32,9 +32,10 @@ Internal Django applicant tracking system where hiring staff track candidates, j
 - `hiring/stages.py`: the stage list, the active and final groups, and `check_move()`, which takes the history facts as keywords and returns a `MoveCheck(allowed, reason)`. No database access.
 - `hiring/services.py`: application creation, stage moves (`move_application`), job close/reopen operations, and `stage_facts()`, which derives the rule facts from history. Views use these shared operations.
 - `hiring/templates/hiring/pipeline.html`: workspace assembled from shared sidebar, controls, list, and panel partials. `_workspace` renders full pages or `_selection.html` from the same context.
+- `_selection.html` is the one HTMX response for selection, stage moves and details saves: `_application_panel.html` (which owns `#application-panel`) plus out-of-band list, tabs, job controls, sidebar filter and `_sidebar_jobs.html` counts.
 - `templates/`: `base.html`, nav partials `_nav.html` / `_nav_links.html`, `registration/login.html`.
 - `assets/css/source.css`: Tailwind + DaisyUI source. It scans the template folders and `hiring/forms.py` (for widget classes). Builds to `static/css/tailwind.css` (gitignored).
-- `static/js/htmx.min.js`: vendored HTMX 2.0.4. `static/js/pipeline.js`: narrow-screen panel scrolling, loaded through the base template's head block.
+- `static/js/htmx.min.js`: vendored HTMX 2.0.4. `static/js/pipeline.js`: narrow-screen panel scrolling after a selection (GET) only, loaded through the base template's head block.
 
 ## Conventions
 - `LoginRequiredMiddleware` protects every page site-wide. Don't add per-view login decorators; mark a view `login_not_required` only if it must be public.
@@ -58,6 +59,9 @@ Internal Django applicant tracking system where hiring staff track candidates, j
 - Links from other pages to an application that may be finished open it with `tab=all`, so it's listed and highlighted.
 - Workspace GET views return a partial only when `_wants_partial()` is true (`HX-Request` without `HX-History-Restore-Request`); otherwise they return the full page. A URL that can return either sends `Vary: HX-Request, HX-History-Restore-Request`.
 - HTMX links keep a normal `href` and use the same URL for `hx-get` with `hx-push-url="true"`. Anything outside the swap target that depends on the selection (highlight, filter links, tabs, search, close/reopen `next`) is updated out of band by including the same partial with `oob=True`.
+- Everything that swaps the panel targets `#application-panel` with `hx-swap="outerHTML"`, so every panel response includes that element.
+- Application move and details forms keep their normal `action` and use the same URL for `hx-post`, never pushing or replacing the URL. For HTMX, the view returns `_selection.html` with status 200, including on refusals and form errors (HTMX doesn't swap 4xx). Otherwise a success redirects to the application URL and a refusal renders the full page.
+- Only services write `Application.stage`. Other application saves use `update_fields` that leave out `stage`, so a stale instance can't overwrite it.
 - Allowed and blocked moves and their explanations come from `check_move()`; templates don't decide transition rules.
 - For application operations and UI actions, derive rule facts through `services.stage_facts()` and pass them to `check_move()`. Pure rule tests may supply facts directly. Block reopening when history doesn't identify a valid target.
 - Workspace close/reopen controls pass the view's `return_url` (displayed job or application plus its `jobs`, `tab` and `q`) as `next`, never the request path, which can be the move URL after a failed move.

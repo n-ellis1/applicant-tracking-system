@@ -1,4 +1,11 @@
-{# Detail panel for the selected application. Candidate and job aren't editable. #}
+{# Detail panel for the selected application. Candidate and job aren't editable. HTMX replaces the whole element (outerHTML), so selection, move and details responses all include this wrapper. #}
+<div id="application-panel" class="card-body gap-5 p-4">
+{% if selected %}
+{% if unlisted_by_tab or unlisted_by_search %}
+  <div id="unlisted-note" role="status" class="alert alert-info">
+    <span class="min-w-0 break-words">This application is no longer in the list because it doesn't match {% if unlisted_by_tab %}the {{ tab_label }} tab{% endif %}{% if unlisted_by_tab and unlisted_by_search %} or {% endif %}{% if unlisted_by_search %}the search “{{ q }}”{% endif %}. Your tab and search haven't changed.</span>
+  </div>
+{% endif %}
 <div class="flex flex-wrap items-center gap-2">
   <h2 class="min-w-0 break-words text-xl font-semibold">{{ selected.candidate }}</h2>
   <span class="badge badge-primary">{{ selected.get_stage_display }}</span>
@@ -69,21 +76,21 @@
   </div>
 {% endif %}
 
-{# Every move posts the target stage; the service re-checks it. #}
+{# Every move posts the target stage; the service re-checks it. HTMX posts to the same URL as the normal action and replaces this panel without pushing a URL, so the browser stays on the application's URL. #}
 {% url 'hiring:application_move' selected.pk as move_url %}
 <section class="flex flex-col gap-3" aria-labelledby="actions-heading">
   <h3 id="actions-heading" class="font-semibold">Stage actions</h3>
   {% if actions.advance or actions.reopen or actions.end_moves %}
     <div class="flex flex-wrap items-start gap-2">
       {% if actions.advance %}
-        <form method="post" action="{{ move_url }}?{{ list_query }}">
+        <form method="post" action="{{ move_url }}?{{ list_query }}" hx-post="{{ move_url }}?{{ list_query }}" hx-target="#application-panel" hx-swap="outerHTML">
           {% csrf_token %}
           <input type="hidden" name="stage" value="{{ actions.advance }}">
           <button type="submit" class="btn btn-sm btn-primary">Advance to {{ actions.advance.label }}</button>
         </form>
       {% endif %}
       {% if actions.reopen %}
-        <form method="post" action="{{ move_url }}?{{ list_query }}">
+        <form method="post" action="{{ move_url }}?{{ list_query }}" hx-post="{{ move_url }}?{{ list_query }}" hx-target="#application-panel" hx-swap="outerHTML">
           {% csrf_token %}
           <input type="hidden" name="stage" value="{{ actions.reopen }}">
           <button type="submit" class="btn btn-sm btn-primary">Reopen to {{ actions.reopen.label }}</button>
@@ -93,7 +100,7 @@
       {% for end_stage in actions.end_moves %}
         <details class="open:w-full" data-confirm="{{ end_stage }}">
           <summary class="btn btn-sm btn-outline btn-error">{% if end_stage == 'rejected' %}Reject…{% else %}Mark withdrawn…{% endif %}</summary>
-          <form method="post" action="{{ move_url }}?{{ list_query }}" class="mt-2 flex flex-col gap-2 rounded-box border border-error/50 bg-base-100 p-3">
+          <form method="post" action="{{ move_url }}?{{ list_query }}" hx-post="{{ move_url }}?{{ list_query }}" hx-target="#application-panel" hx-swap="outerHTML" class="mt-2 flex flex-col gap-2 rounded-box border border-error/50 bg-base-100 p-3">
             {% csrf_token %}
             <input type="hidden" name="stage" value="{{ end_stage }}">
             <label for="reason-{{ end_stage }}" class="text-sm">Reason (optional)</label>
@@ -110,7 +117,7 @@
       <p class="mb-1 text-sm text-base-content/70">Other moves</p>
       <div class="flex flex-wrap gap-2">
         {% for target in actions.other_moves %}
-          <form method="post" action="{{ move_url }}?{{ list_query }}">
+          <form method="post" action="{{ move_url }}?{{ list_query }}" hx-post="{{ move_url }}?{{ list_query }}" hx-target="#application-panel" hx-swap="outerHTML">
             {% csrf_token %}
             <input type="hidden" name="stage" value="{{ target }}">
             <button type="submit" class="btn btn-sm btn-outline">Move to {{ target.label }}</button>
@@ -136,6 +143,31 @@
   {% endif %}
 </section>
 
+{# Applied-on date and notes. Saving writes no stage history. Like the moves, HTMX posts to the normal action's URL and pushes nothing. #}
+{% url 'hiring:application_details' selected.pk as details_url %}
+<section class="flex flex-col gap-3" aria-labelledby="details-heading">
+  <h3 id="details-heading" class="font-semibold">Application details</h3>
+  {% if details_saved %}
+    <div role="status" class="alert alert-success"><span>Details saved.</span></div>
+  {% endif %}
+  <form id="details-form" method="post" action="{{ details_url }}?{{ list_query }}" hx-post="{{ details_url }}?{{ list_query }}" hx-target="#application-panel" hx-swap="outerHTML" class="flex flex-col gap-3">
+    {% csrf_token %}
+    {% for error in details_form.non_field_errors %}
+      <p class="text-sm text-error">{{ error }}</p>
+    {% endfor %}
+    {% for field in details_form %}
+      <div class="flex flex-col gap-1">
+        <label for="{{ field.id_for_label }}" class="text-sm">{{ field.label }}</label>
+        {{ field }}
+        {% for error in field.errors %}
+          <p class="text-sm text-error">{{ error }}</p>
+        {% endfor %}
+      </div>
+    {% endfor %}
+    <button type="submit" class="btn btn-sm btn-primary self-start">Save details</button>
+  </form>
+</section>
+
 <section>
   <h3 class="mb-2 font-semibold">Stage history</h3>
   <ol class="flex flex-col gap-2">
@@ -150,3 +182,7 @@
     {% endfor %}
   </ol>
 </section>
+{% else %}
+  <p class="text-base-content/80">Select an application to see its details.</p>
+{% endif %}
+</div>

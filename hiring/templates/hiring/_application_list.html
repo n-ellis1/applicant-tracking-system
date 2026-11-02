@@ -10,8 +10,8 @@
             {% for application in group.applications %}
               {% url 'hiring:application_detail' application.pk as detail_url %}
               <li>
-                {# HTMX loads the same URL into the panel and pushes it; the href works without JavaScript. #}
-                <a hx-get="{{ detail_url }}?{{ list_query }}" hx-target="#application-panel" hx-push-url="true" href="{{ detail_url }}?{{ list_query }}"{% if application == selected %} aria-current="true" class="menu-active"{% endif %}>
+                {# HTMX replaces the panel with the same URL's response and pushes it; the href works without JavaScript. #}
+                <a hx-get="{{ detail_url }}?{{ list_query }}" hx-target="#application-panel" hx-swap="outerHTML" hx-push-url="true" href="{{ detail_url }}?{{ list_query }}"{% if application == selected %} aria-current="true" class="menu-active"{% endif %}>
                   <span class="flex min-w-0 grow flex-col">
                     <span class="break-words font-medium">{{ application.candidate }}</span>
                     <span class="break-all text-xs opacity-80">{{ application.candidate.email }}</span>

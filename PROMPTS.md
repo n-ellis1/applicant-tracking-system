@@ -28,6 +28,179 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 12: HTMX stage actions and application details
+
+### Prompts
+
+1. **Start Phase 12 (`/implement`).**
+   > /implement @prd/applicant-tracking-system.md @plans/applicant-tracking-system.md implement Phase 12 only
+   >
+   > Read CLAUDE.md and follow the implement and tdd skills. Preserve the stage rules and existing HTMX selection, browser history, and jobs/tab/q behavior.
+   >
+   > Implement the planned HTMX stage actions and application-details form:
+   > - Stage actions update the panel, list, and affected counts without a full reload.
+   > - If the selected application leaves the current filter, keep its details visible with an explanation. Don't change the filters automatically.
+   > - Refused moves show an error and refreshed actions without changing stage or history.
+   > - Applied-on date and notes save through HTMX. Future dates show inline errors; editing details creates no stage history.
+   > - Keep normal POST behavior working without JavaScript.
+   >
+   > Propose the TDD candidates and wait for my approval before writing code.
+   >
+   > After automated checks pass, give me browser verification steps and wait for my confirmation. Don't mark the phase complete, commit, push, or start Phase 13 yet.
+
+2. **Approve all three candidates; use Offer → Hired for candidate 1.**
+   > I approve all three candidates and the planned approach.
+   >
+   > For candidate 1, use a move that changes the active count, such as Offer to Hired. An ordinary active-to-active advance wouldn't prove the sidebar count changes.
+   >
+   > Keep ordinary tests for future-date errors, no history on details edits, stale detail saves preserving the stage, and normal non-JavaScript POST behavior.
+   >
+   > Start with candidate 1. Show me the test and RED result, then stop for approval before implementing it. Don't add URL history entries for move or details POST endpoints.
+
+3. **Approve candidate 1's test; add a no-history-header check.**
+   > I approve this test. Implement the HTMX success response and shared sidebar-jobs partial, preserving normal POST redirects.
+   >
+   > Keep the application URL and jobs/tab/q unchanged. Include a check that the response doesn't send HX-Redirect, HX-Push-Url, or HX-Replace-Url to a POST endpoint.
+   >
+   > Show me the GREEN result and full regression results, then stop before candidate 2.
+
+4. **Start candidate 2.**
+   > Yes, proceed to candidate 2. Test that rejecting an application from the Active tab keeps its updated panel visible, shows the no-longer-matches explanation, and preserves jobs/tab/q without switching filters.
+   >
+   > Show me the test and RED result, then stop for approval before implementing the note.
+
+5. **Approve candidate 2's test and wording; keep the note accurate when both exclude it.**
+   > I approve the test as written and the proposed note wording.
+   >
+   > Implement the mismatch check and panel note, including normal full-page renders. If both the tab and search exclude the application, make sure the explanation remains accurate.
+   >
+   > Show me the GREEN result and relevant regression results, then stop before moving to the next candidate.
+
+6. **Start candidate 3.**
+   > Candidate 2 implements the intended behavior. Proceed to candidate 3: a refused HTMX move.
+   >
+   > The test should verify an inline error and refreshed actions for the current database state, with no change to stage or history. Preserve jobs/tab/q and return a partial response without redirecting or changing browser history.
+   >
+   > Show me the test and RED result, then stop for approval before implementing.
+
+7. **Approve candidate 3's test.**
+   > I approve this test as written.
+   >
+   > Implement the refused-move partial response for HTMX requests, preserving the full-page fallback for normal requests and the existing history-restore handling.
+   >
+   > Show me the GREEN result and relevant regression results. Then stop to review the behavior before continuing with the remaining Phase 12 requirements.
+
+8. **Finish the remaining work, with outerHTML swaps.**
+   > Candidate 3 implements the intended behavior. Continue with the remaining Phase 12 work you listed.
+   >
+   > Use hx-swap="outerHTML" when replacing #application-panel, keep normal form actions, and preserve jobs/tab/q without pushing browser history.
+   >
+   > For details saves, write only applied_on, notes and updated_at so a stale form cannot overwrite the current stage. Keep candidate and job fixed, and verify both successful and invalid saves create no history entries.
+   >
+   > Run the full test suite, Ruff lint and format checks, and the migration check. Then provide exact browser verification steps and stop for my confirmation. Don't mark Phase 12 complete, commit, push, or begin Phase 13 yet.
+
+9. **Browser checks passed; mark complete and propose CLAUDE.md.**
+   > All Phase 12 browser checks passed.
+   >
+   > Mark Phase 12's acceptance criteria complete. Review CLAUDE.md and propose any needed changes as a diff, limited to verified commands, structure, and durable conventions. If none are needed, say so.
+   >
+   > Don't commit, push, or start Phase 13 yet.
+
+10. **Correction: scope the POST-form convention, then write this log.**
+    > I approve these changes with one adjustment: scope the new POST-form convention to application move and details forms, rather than all workspace POST forms.
+    >
+    > Apply the CLAUDE.md changes, keeping the file concise.
+    >
+    > Then append a session log to PROMPTS.md at the repo root, under today's date, newest entry at the top. Record every prompt I gave you this session, in order, including any corrections. End the entry with a short summary: the outcome, any places where I deviated from a recommended answer or asked follow-up questions, and anything that went sideways.
+    >
+    > Finally, show git status, git diff --stat, and the proposed Phase 12 commit message. Don't commit, push, or start Phase 13 yet.
+
+### Summary
+
+- **Outcome:**
+  - **Move view (`application_move`):**
+    - **Normal request, move made:** redirects as before. The redirect URL now comes from a shared `_application_return_url()`, which keeps valid `jobs`, `tab` and `q`.
+    - **Everything else:** renders `_workspace(..., move_form=form)`, using `_selection.html` for HTMX (made or refused, status 200) and `pipeline.html` otherwise.
+    - **Headers:** it sends `Vary: HX-Request, HX-History-Restore-Request` and no `HX-*` headers.
+  - **Details view:**
+    - **New:** `application_details` at `/pipeline/applications/<pk>/details/` (`@require_POST`), with `ApplicationDetailsForm` (a `ModelForm` for `applied_on` and `notes`).
+    - **Validation:** the model's `validate_not_future` refuses future dates, as at creation.
+    - **Saving:** writes with `update_fields=["applied_on", "notes", "updated_at"]` and creates no history. With HTMX, a save returns the panel with "Details saved.", and a refused save returns the bound form with an inline error. Without JavaScript, a save redirects keeping `jobs`/`tab`/`q`, and a refused save renders the full page.
+    - **Refused saves:** reload the stored values onto the instance, so the panel summary doesn't show the refused date.
+  - **No-longer-matches note:**
+    - `_workspace` computes `unlisted_by_search` and `unlisted_by_tab` separately.
+    - The panel's `#unlisted-note` names the tab, the search, or both.
+    - It appears on every render, including full pages after a non-JavaScript move.
+  - **Templates:**
+    - **Panel element:** `_application_panel.html` now owns the `#application-panel` element and its empty-state text.
+    - **Swaps:** every move form and the details form carry `hx-post` (same URL as `action`), `hx-target="#application-panel"` and `hx-swap="outerHTML"`. Selection links switched to `outerHTML` too.
+    - **Sidebar:** the job lists moved to `_sidebar_jobs.html` (`id="sidebar-jobs"`), included out of band from `_selection.html`.
+    - **Details section:** the panel gained an "Application details" section between the stage actions and the history.
+  - **`pipeline.js`:** scrolls only after an HTMX GET (a selection), not after a move or save.
+  - **TDD, three candidates (all RED-to-GREEN, in the new `hiring/tests/test_htmx_actions.py`):**
+    1. **One response updates everything a move affects** (`test_htmx_move_updates_the_panel_list_tab_counts_and_sidebar_together`):
+       - **Setup:** Offer → Hired on the All tab, with two applications.
+       - **Checks:** a partial with "Offer → Hired"; the out-of-band list's Hired group holds only the moved application; the tabs read `Active 1`, `Finished 1`, `All 2`; the out-of-band `#sidebar-jobs` reads "Data Analyst 1 in progress"; and no `HX-Redirect`/`HX-Push-Url`/`HX-Replace-Url` header. I asked for the header check after approving the test.
+       - **RED:** `assert 302 == 200`.
+       - **GREEN:** the HTMX branch rendering `_selection.html`, plus the sidebar partial.
+    2. **Moving out of the tab keeps the panel with a note** (`test_htmx_move_out_of_the_tab_keeps_the_panel_with_a_note_and_the_same_filters`):
+       - **Setup:** a reject from Active with `jobs=open&q=example`.
+       - **Checks:** the exact note text; the list keeps only the other application, with the same state; Active stays selected; the tab links and search keep `jobs`/`q`.
+       - **RED:** `assert '' == "This application is no longer in the list…"`.
+       - **GREEN:** the two mismatch flags and the panel note.
+    3. **A refused HTMX move returns the panel** (`test_refused_htmx_move_returns_the_panel_with_the_error_and_refreshed_actions`):
+       - **Setup:** a stale Screening move on an application rejected meanwhile, with `jobs=open&tab=all&q=doe`.
+       - **Checks:** a partial with no `HX-*` headers; the error and the rule's reason; the only form is the reopen to Applied, posting with the same state; the list and tabs keep the state; stage and history are unchanged.
+       - **RED:** `assert '<!doctype html>' not in content`.
+       - **GREEN:** the restructured end of the move view.
+  - **Ordinary tests** (written after the code; all passed once written), 16 cases:
+    - the note on full pages for tab, search, and tab-and-search exclusion (3)
+    - no note when the selection is listed (2)
+    - every panel form's `hx-post` equals its `action`, targets the panel with `outerHTML`, doesn't push, and keeps `jobs`/`tab`/`q`, for an active and a finished application (2)
+    - move and details POST responses include the `#application-panel` element (not out of band), send no `HX-*` headers, and send `Vary` (2)
+    - an HTMX details save updates the panel, trims the notes and writes no history
+    - a future date shows an inline error beside the field, keeps the typed values, saves nothing and writes no history
+    - a non-JavaScript save redirects keeping the filters
+    - a non-JavaScript invalid save renders the full page with the error
+    - a stage change made mid-save (simulated by patching `ApplicationDetailsForm.clean`) survives the details save
+    - posted candidate, job and stage are ignored
+    - the details view rejects GET (405)
+  - **Phase 11 test updated:** `test_selection.py` now also asserts `hx-swap="outerHTML"` on selection links, and that the selection partial contains the `#application-panel` element.
+  - **Test totals:** 562 before Phase 12, 581 after. That's +1 (candidate 1), +1 (candidate 2) +5 (its ordinary tests), +1 (candidate 3) and +11 (remaining ordinary tests).
+  - **Automated checks:** 581 passed. `ruff check`, `ruff format --check` and `makemigrations --check` were clean. No migration was needed.
+  - **Browser checks (by me):** all passed. They covered:
+    - HTMX reject with the note and counts
+    - advance and the sidebar count
+    - search and tab kept through moves
+    - the two-tab stale move
+    - details save and the future-date error
+    - Back and Forward after a move, including a cleared history cache
+    - no-JavaScript moves and saves
+    - narrow-screen scrolling
+  - **Docs:**
+    - All six Phase 12 acceptance criteria are ticked in the plan.
+    - CLAUDE.md gained a `_selection.html` layout line, and the `pipeline.js` line now says "after a selection (GET) only".
+    - Conventions gained the `outerHTML` panel rule, the move/details POST-form rule and the services-only stage-write rule.
+- **Deviations:**
+  - **Candidate 1's move:** I specified Offer → Hired, so the test proves the sidebar count changes. The agent's proposal didn't name a move.
+  - **Ordinary-test list:** I named the ordinary tests to keep, including stale details saves preserving the stage. The agent covered that by simulating a concurrent move during form validation.
+  - **No-history headers:** I added the `HX-Redirect`/`HX-Push-Url`/`HX-Replace-Url` check to candidate 1 after approving it. Candidate 3 and the ordinary POST tests repeat it.
+  - **Note when both exclude it:** I asked for an accurate explanation when both the tab and the search exclude the application. The agent's proposal covered tab or search separately. The combined wording and three full-page cases were added.
+  - **outerHTML swaps:** the agent's plan used the default `innerHTML` swap into the panel. I required `outerHTML`, so the panel partial took over its wrapper element, and the Phase 11 selection links and test switched to `outerHTML` too.
+  - **CLAUDE.md:** I scoped the POST-form convention to application move and details forms instead of all workspace POST forms.
+- **Sideways:**
+  - **Tool timeout:** the first full-suite run passed the shell's 120-second limit and finished in the background. Later runs used a longer timeout.
+  - **Formatter:** `ruff format` wanted the tab-mismatch expression wrapped. The agent replaced it with a tab-to-stages mapping, which `ruff format` then also rewrapped. Later it rewrapped one test signature. Nothing asserted changed.
+  - **Encoding damage:** to swap `timezone.timedelta` for a `datetime` import, the agent rewrote `test_htmx_actions.py` with PowerShell `Get-Content`/`Set-Content`. That read the file in the ANSI codepage and wrote a BOM. The BOM was spotted and stripped, but the double-encoded `→` and `“ ”` weren't noticed until four tests failed. They were repaired with a Python byte round-trip, and the file's non-ASCII characters and test results were checked afterwards.
+  - **Draft cleanup:** candidate 3's first draft had a convoluted tab assertion, rewritten before the first run.
+  - **Ordinary tests not run RED:** they were written after the code, so they weren't seen failing first.
+  - **Known limitations, reported before browser checks:**
+    - A move re-renders the details form from stored values, so unsaved typed notes are lost.
+    - HTMX's history cache can show pre-move list counts when going Back to an earlier entry, until refresh. The selection itself is always right.
+    - The note also appears on direct links whose tab excludes the application.
+  - **Skill lookup:** `/implement` isn't a registered skill in this session, so the agent read `.claude/skills/implement/SKILL.md` directly.
+  - **Log edit:** the first attempt to insert this entry missed its anchor because of the format block's indentation, and was retried.
+
 ## 2026-11-01 — Phase 11: HTMX selection and browser history
 
 ### Prompts

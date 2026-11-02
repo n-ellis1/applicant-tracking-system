@@ -11,26 +11,7 @@
     <aside class="card h-fit border border-base-300 bg-base-200">
       <nav class="card-body gap-1 p-2" aria-label="Jobs">
         {% include "hiring/_job_filter.html" %}
-        {% if jobs_filter != 'closed' %}
-          <h2 class="px-2 pt-2 text-sm font-semibold text-base-content/70">Open jobs</h2>
-          <ul class="menu w-full">
-            {% for sidebar_job in open_jobs %}
-              {% include "hiring/_sidebar_job.html" %}
-            {% empty %}
-              <li class="menu-disabled"><span>None</span></li>
-            {% endfor %}
-          </ul>
-        {% endif %}
-        {% if jobs_filter != 'open' %}
-          <h2 class="px-2 pt-2 text-sm font-semibold text-base-content/70">Closed jobs</h2>
-          <ul class="menu w-full">
-            {% for sidebar_job in closed_jobs %}
-              {% include "hiring/_sidebar_job.html" %}
-            {% empty %}
-              <li class="menu-disabled"><span>None</span></li>
-            {% endfor %}
-          </ul>
-        {% endif %}
+        {% include "hiring/_sidebar_jobs.html" %}
       </nav>
     </aside>
 
@@ -50,13 +31,7 @@
 
       {# Detail panel for the selected application. #}
       <section class="card h-fit min-w-0 border border-base-300 bg-base-200" aria-label="Application details">
-        <div id="application-panel" class="card-body gap-5 p-4">
-          {% if selected %}
-            {% include "hiring/_application_panel.html" %}
-          {% else %}
-            <p class="text-base-content/80">Select an application to see its details.</p>
-          {% endif %}
-        </div>
+        {% include "hiring/_application_panel.html" %}
       </section>
     {% else %}
       <div class="card h-fit border border-base-300 bg-base-200 lg:col-span-2">

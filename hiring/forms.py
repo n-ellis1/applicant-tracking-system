@@ -1,7 +1,7 @@
 from django import forms
 from django.utils import timezone
 
-from .models import Candidate, JobOpening, Skill, validate_not_future
+from .models import Application, Candidate, JobOpening, Skill, validate_not_future
 from .stages import Stage
 
 
@@ -130,6 +130,21 @@ class CandidateApplicationForm(ApplicationForm):
         self.fields["job"].queryset = JobOpening.objects.filter(
             status=JobOpening.Status.OPEN
         ).exclude(applications__candidate=candidate)
+
+
+class ApplicationDetailsForm(forms.ModelForm):
+    """The only application fields editable after creation. The model's
+    validator refuses a future applied-on date, as at creation."""
+
+    class Meta:
+        model = Application
+        fields = ["applied_on", "notes"]
+        widgets = {
+            "applied_on": forms.DateInput(
+                format="%Y-%m-%d", attrs={"class": "input w-full", "type": "date"}
+            ),
+            "notes": forms.Textarea(attrs={"class": "textarea w-full", "rows": 4}),
+        }
 
 
 class MoveForm(forms.Form):

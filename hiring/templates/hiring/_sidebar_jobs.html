@@ -1,0 +1,23 @@
+{# Sidebar job lists with in-progress counts. A stage move re-renders them out of band so the counts stay current. #}
+<div id="sidebar-jobs" class="contents"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% if jobs_filter != 'closed' %}
+    <h2 class="px-2 pt-2 text-sm font-semibold text-base-content/70">Open jobs</h2>
+    <ul class="menu w-full">
+      {% for sidebar_job in open_jobs %}
+        {% include "hiring/_sidebar_job.html" %}
+      {% empty %}
+        <li class="menu-disabled"><span>None</span></li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+  {% if jobs_filter != 'open' %}
+    <h2 class="px-2 pt-2 text-sm font-semibold text-base-content/70">Closed jobs</h2>
+    <ul class="menu w-full">
+      {% for sidebar_job in closed_jobs %}
+        {% include "hiring/_sidebar_job.html" %}
+      {% empty %}
+        <li class="menu-disabled"><span>None</span></li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</div>

@@ -110,6 +110,10 @@ def test_htmx_selection_highlights_only_the_new_application_out_of_band(
         f"{app_url(second)}?jobs=open", headers={"HX-Request": "true"}
     )
 
+    # The panel element itself replaces the old one (outerHTML).
+    panel, _ = links_inside(response.content.decode(), "application-panel")
+    assert panel is not None
+    assert "hx-swap-oob" not in panel
     element, links = links_inside(response.content.decode(), "application-list")
     # The list comes back as an out-of-band swap beside the panel.
     assert element is not None
@@ -154,6 +158,7 @@ def test_selection_links_load_into_the_panel_and_push_their_own_url(
         # on the same view.
         assert link.get("hx-get") == link["href"]
         assert link.get("hx-target") == "#application-panel"
+        assert link.get("hx-swap") == "outerHTML"
         assert link.get("hx-push-url") == "true"
     # The target exists on the page.
     panel, _ = links_inside(content, "application-panel")

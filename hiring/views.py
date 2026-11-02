@@ -11,6 +11,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from . import services
 from .forms import (
+    ApplicationDetailsForm,
     CandidateApplicationForm,
     CandidateForm,
     JobApplicationForm,
@@ -83,7 +84,13 @@ APPLICATION_TABS = [("active", "Active"), ("finished", "Finished"), ("all", "All
 
 
 def _workspace(
-    request, job, selected=None, move_form=None, template="hiring/pipeline.html"
+    request,
+    job,
+    selected=None,
+    move_form=None,
+    details_form=None,
+    details_saved=False,
+    template="hiring/pipeline.html",
 ):
     # job is None only on the landing page when no job is open.
     # The sidebar filter defaults to the job's status so its link is visible;
@@ -176,6 +183,20 @@ def _workspace(
             for stage in Stage
             if (members := [a for a in by_tab[tab] if a.stage == stage])
         ]
+        if selected is not None:
+            # The panel keeps a selection the list leaves out, after a move or
+            # from a link, and says which of the tab and search excludes it.
+            # Neither is changed automatically.
+            context["tab_label"] = dict(APPLICATION_TABS)[tab]
+            context["unlisted_by_search"] = selected.pk not in {
+                a.pk for a in applications
+            }
+            tab_stages = {
+                "active": ACTIVE_STAGES,
+                "finished": FINAL_STAGES,
+                "all": Stage,
+            }
+            context["unlisted_by_tab"] = selected.stage not in tab_stages[tab]
     if selected is not None:
         history = list(selected.history.select_related("changed_by"))
         context["history"] = history
@@ -189,6 +210,11 @@ def _workspace(
                 for messages in move_form.errors.values()
                 for message in messages
             ]
+        # A refused save keeps what was typed beside its errors.
+        if details_form is None:
+            details_form = ApplicationDetailsForm(instance=selected)
+        context["details_form"] = details_form
+        context["details_saved"] = details_saved
     return render(request, template, context)
 
 
@@ -390,15 +416,9 @@ def application_detail(request, pk):
     application = get_object_or_404(
         Application.objects.select_related("candidate", "job"), pk=pk
     )
-    if _wants_partial(request):
-        response = _workspace(
-            request,
-            application.job,
-            application,
-            template="hiring/_selection.html",
-        )
-    else:
-        response = _workspace(request, application.job, application)
+    response = _workspace(
+        request, application.job, application, template=_panel_or_page(request)
+    )
     # The same URL serves the panel or the full page depending on these
     # headers, so caches must keep the two apart.
     patch_vary_headers(response, ["HX-Request", "HX-History-Restore-Request"])
@@ -422,23 +442,77 @@ def application_move(request, pk):
         except ValidationError as error:
             form.add_error(None, error)
         else:
-            # Back to the same workspace URL, keeping a valid sidebar filter,
-            # tab and search.
-            url = reverse("hiring:application_detail", args=[pk])
-            query = {}
-            jobs_filter = request.GET.get("jobs")
-            if jobs_filter in dict(JOB_STATUS_FILTERS):
-                query["jobs"] = jobs_filter
-            tab = request.GET.get("tab")
-            if tab in dict(APPLICATION_TABS) and tab != "active":
-                query["tab"] = tab
-            if q := request.GET.get("q", "").strip():
-                query["q"] = q
-            if query:
-                url += "?" + urlencode(query)
-            return redirect(url)
-    # The move changed nothing; show why, with actions for the current stage.
-    return _workspace(request, application.job, application, move_form=form)
+            if not _wants_partial(request):
+                return redirect(_application_return_url(request, pk))
+    # HTMX gets the panel and, out of band, the list and counts, whether the
+    # move was made or refused. The browser stays on the application URL, so
+    # nothing is pushed. A refused move changed nothing; the panel shows why,
+    # with actions for the current stage.
+    response = _workspace(
+        request,
+        application.job,
+        application,
+        move_form=form,
+        template=_panel_or_page(request),
+    )
+    patch_vary_headers(response, ["HX-Request", "HX-History-Restore-Request"])
+    return response
+
+
+@require_POST
+def application_details(request, pk):
+    # Only the applied-on date and notes are editable; candidate and job stay
+    # fixed. Saving them writes no stage history.
+    application = get_object_or_404(
+        Application.objects.select_related("candidate", "job"), pk=pk
+    )
+    form = ApplicationDetailsForm(request.POST, instance=application)
+    saved = form.is_valid()
+    if saved:
+        form.save(commit=False)
+        # Only services write the stage. Saving just these fields means a
+        # stage change made since this request loaded the application stays.
+        application.save(update_fields=["applied_on", "notes", "updated_at"])
+        if not _wants_partial(request):
+            return redirect(_application_return_url(request, pk))
+    else:
+        # Validation copied the refused values onto the instance; show the
+        # stored ones outside the form.
+        application.refresh_from_db(fields=["applied_on", "notes"])
+    response = _workspace(
+        request,
+        application.job,
+        application,
+        details_form=None if saved else form,
+        details_saved=saved,
+        template=_panel_or_page(request),
+    )
+    patch_vary_headers(response, ["HX-Request", "HX-History-Restore-Request"])
+    return response
+
+
+def _panel_or_page(request):
+    if _wants_partial(request):
+        return "hiring/_selection.html"
+    return "hiring/pipeline.html"
+
+
+def _application_return_url(request, pk):
+    # The application's workspace URL, keeping a valid sidebar filter, tab
+    # and search from the posting page.
+    url = reverse("hiring:application_detail", args=[pk])
+    query = {}
+    jobs_filter = request.GET.get("jobs")
+    if jobs_filter in dict(JOB_STATUS_FILTERS):
+        query["jobs"] = jobs_filter
+    tab = request.GET.get("tab")
+    if tab in dict(APPLICATION_TABS) and tab != "active":
+        query["tab"] = tab
+    if q := request.GET.get("q", "").strip():
+        query["q"] = q
+    if query:
+        url += "?" + urlencode(query)
+    return url
 
 
 # Jobs

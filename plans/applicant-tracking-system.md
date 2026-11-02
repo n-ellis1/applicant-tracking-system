@@ -568,12 +568,12 @@ The panel gains an application details form for applied-on date and notes, saved
 
 ### Acceptance criteria
 
-- [ ] A stage action updates the panel, list and affected counts in one response without a full reload.
-- [ ] A move that takes the application outside the tab or search keeps it in the panel with a no-longer-matches note, and the tab and search are unchanged.
-- [ ] A move rejected by the service shows an error in the panel with refreshed actions, and the stage and history are unchanged.
-- [ ] Saving applied-on date and notes updates the panel without a reload. A future date shows an inline error and isn't saved.
-- [ ] Saving details creates no history entry and doesn't affect delete eligibility.
-- [ ] After a move, Back and Forward still restore the right selection.
+- [x] A stage action updates the panel, list and affected counts in one response without a full reload.
+- [x] A move that takes the application outside the tab or search keeps it in the panel with a no-longer-matches note, and the tab and search are unchanged.
+- [x] A move rejected by the service shows an error in the panel with refreshed actions, and the stage and history are unchanged.
+- [x] Saving applied-on date and notes updates the panel without a reload. A future date shows an inline error and isn't saved.
+- [x] Saving details creates no history entry and doesn't affect delete eligibility.
+- [x] After a move, Back and Forward still restore the right selection.
 
 ### Possible TDD candidates (not approved)
 
