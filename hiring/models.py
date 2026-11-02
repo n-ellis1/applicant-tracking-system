@@ -68,3 +68,38 @@ class JobOpening(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class Candidate(models.Model):
+    class Source(models.TextChoices):
+        COMPANY_WEBSITE = "company_website", "Company Website"
+        JOB_BOARD = "job_board", "Job Board"
+        REFERRAL = "referral", "Referral"
+        OTHER = "other", "Other"
+
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    email = models.EmailField()
+    phone = models.CharField(max_length=40, blank=True)
+    location = models.CharField(max_length=200, blank=True)
+    profile_url = models.URLField("profile URL", blank=True)
+    notes = models.TextField(blank=True)
+    # How the candidate first came to the company. Later applications never
+    # change it.
+    source = models.CharField(max_length=20, choices=Source)
+    source_details = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = [Lower("last_name"), Lower("first_name"), "pk"]
+        constraints = [
+            models.UniqueConstraint(
+                Lower("email"),
+                name="unique_candidate_email_ci",
+                violation_error_message="A candidate with this email already exists.",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name}"

@@ -28,6 +28,110 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 5: Candidates
+
+### Prompts
+
+1. **Start Phase 5 (`/implement`).**
+   > /implement @prd/applicant-tracking-system.md @plans/applicant-tracking-system.md implement Phase 5 only
+   >
+   > Read CLAUDE.md and follow the implement and tdd skills. Propose the TDD candidates, explain each in beginner-friendly language, and wait for my approval before writing code.
+   >
+   > After automated checks pass, give me browser verification steps and wait for my confirmation. Don't mark the phase complete, commit, push, or start Phase 6 yet.
+
+2. **Approve both candidates, splitting the search tests.**
+   > I approve both candidates. For candidate 2, use separate tests for matching first name, last name, and email, and for last-name/first-name ordering, so failures are clear.
+   >
+   > Start with the email normalization test. Show me the test and RED result, then stop for approval before implementing the change.
+   >
+   > Keep all the ordinary tests you listed, including duplicate checks on create and edit, self-email edits, and the database constraint.
+
+3. **Approve test 1 (email normalization).**
+   > I approve this test. Add email lowercasing in CandidateForm.clean_email, then show me the GREEN result and full regression results. Stop before starting the search tests.
+
+4. **Confirm cycle 1 and start the first-name search test.**
+   > Yes, this implements the intended create-form behavior. Proceed with the first search test, showing the test and RED result before implementing its query logic. Keep edit and admin normalization covered by the ordinary tests later in this phase.
+
+5. **Approve test 2 (first-name search).**
+   > I approve this test. Add the first-name search behavior, then show me the GREEN result and regression results. Stop before starting the last-name search test.
+
+6. **Start test 3 (last-name search).**
+   > Yes, proceed with the last-name search test. Use data where the search text doesn't also match the first name or email. Show me the test and RED result, then stop for approval before changing the query.
+
+7. **Approve test 3.**
+   > I approve this test. Extend the query to match first name OR last name using Q objects. Show me the GREEN result and regression results, then stop before the email search test.
+
+8. **Start test 4 (email search).**
+   > Yes, proceed with the email search test. Use search text found only in the email, not either name. Show me the test and RED result, then stop for approval before changing the query.
+
+9. **Approve test 4.**
+   > I approve this test. Add email__icontains as the third OR condition. Show me the GREEN result and regression results, then stop before the ordering test.
+
+10. **Ordering: keep the working code, write a regression test.**
+    > Go with option 2. Keep the existing ordering and write the test as a regression test. Check last-name ordering and first-name ordering when two candidates share a last name. Show me the result.
+    >
+    > Record honestly that ordering was added during scaffolding, so this wasn't a RED-to-GREEN cycle. Don't remove working behavior to manufacture a failure.
+
+11. **Continue with the rest of Phase 5, with logging instructions.**
+    > Yes, continue with the remaining Phase 5 work and ordinary tests as listed.
+    >
+    > For the session log, record four RED-to-GREEN tests: email normalization, first-name search, last-name search, and email search. Record ordering separately as a regression test that passed immediately.
+    >
+    > Run all planned checks, then give me browser verification steps. Wait for my confirmation before marking Phase 5 complete, committing, pushing, or starting Phase 6.
+
+12. **Browser checks passed; mark complete and propose CLAUDE.md.**
+    > Phase 5 manual verification passed: email normalization, duplicate checks on create and edit, keeping a candidate's own email, optional fields and sources, search and ordering, pagination preserving search, delete confirmation and cancel, admin duplicate validation, and dark narrow-screen layouts.
+    >
+    > Mark Phase 5 complete. Show me any proposed CLAUDE.md updates, limited to concise, durable conventions established and verified in this phase. If nothing needs adding, say so.
+    >
+    > Don't commit or start Phase 6 yet.
+
+13. **Leave CLAUDE.md unchanged and write this log.**
+    > Agreed, leave CLAUDE.md unchanged.
+    >
+    > Write this session log to PROMPTS.md according to its instructions. Record the four RED-to-GREEN tests, the ordering regression test that passed immediately, and the completed browser checks.
+    >
+    > Then show me the changed-file summary and proposed Phase 5 commit message before committing. Don't start Phase 6.
+
+### Summary
+
+- **Outcome:**
+  - **Model:** `Candidate` with first and last name, email, optional phone, location, profile URL and notes, a source (Company Website, Job Board, Referral, Other) with optional source details, and timestamps. Ordered by `Lower("last_name")`, `Lower("first_name")`. A `UniqueConstraint(Lower("email"), name="unique_candidate_email_ci")` backs up the form. Migration `0004_candidate`.
+  - **Form:** `CandidateForm` in `hiring/forms.py`. Django's email field trims the spaces, and `clean_email` lowercases the email, then rejects a match against other candidates (skipping the one being edited) with "A candidate with this email already exists." There's no model `save()` override.
+  - **Pages:**
+    - The Candidates placeholder became a real list: GET search, 25 per page, page links that keep the cleaned `q`, and columns for name, email, source and applications (0 until Phase 7).
+    - Create and edit share `candidate_form.html`.
+    - The detail page shows every field, the source with its details, and Central-time created and last-updated times, with a "No applications yet" section ready for Phase 6.
+    - `/candidates/<pk>/delete/` shows a confirmation on GET and deletes on POST. Application protection comes in Phase 6, as planned.
+  - **Admin:** `Candidate` is registered with `CandidateAdminForm`, a subclass of `CandidateForm` with `widgets = {}`, so admin trims, lowercases and checks duplicates like the app.
+  - **TDD test 1** (creating a candidate stores the email trimmed and lowercased): RED with `assert ['Jane.Doe@Example.com'] == ['jane.doe@example.com']` after scaffolding the model, form, create view and a stub detail page. The spaces were already trimmed by Django's form field. Lowercasing in `clean_email` made it GREEN.
+  - **TDD test 2** (search matches first name, ignoring case): RED with `assert ['Jane Doe', 'Sam Rivera'] == ['Jane Doe']` after scaffolding an unfiltered list view. Emails were initials only, so only the first name could match. A `first_name__icontains` filter made it GREEN.
+  - **TDD test 3** (search matches last name): `" RIV "` appears in no first name or email. RED with `assert [] == ['Sam Rivera']`. Changing the filter to `Q(first_name__icontains=q) | Q(last_name__icontains=q)` made it GREEN.
+  - **TDD test 4** (search matches email): `" ACME "` appears only in `jd@acme.test`. RED with `assert [] == ['Jane Doe']`. Adding `| Q(email__icontains=q)` made it GREEN.
+  - **Four genuine RED-to-GREEN cycles** across the two approved candidates. Candidate 2 was split into separate tests, as I asked.
+  - **Ordering regression test** (last name, then first name, with two candidates sharing a last name and a lowercase last name sorting correctly): **passed on its first run. It was not a RED-to-GREEN cycle**, because `Meta.ordering` was added with the model during scaffolding for test 1. A comment above the test says so.
+  - **Ordinary tests:** 27 more test functions (39 cases), covering:
+    - every field saving, the required fields, optional fields left blank, the four source choices, an unknown source being rejected, and an invalid email or profile URL
+    - duplicate email on create with case and spacing variations, and the database constraint when the form is skipped
+    - editing to another candidate's email being rejected, keeping your own email in any case, a changed email being lowercased, the prefilled edit form, and the source staying unchanged
+    - list columns and links, 25 per page, the next-page link with and without a search, and "No candidates match."
+    - the detail page, the delete confirmation not deleting on GET, deleting on POST, 404s, and the signed-out redirect on every candidate page
+    - admin add and change: trimming and lowercasing, duplicates rejected, and a candidate's own email in different case allowed
+  - **Automated checks:** 145 tests passed. `ruff check`, `ruff format --check` and `makemigrations --check` were clean.
+  - **Browser checks (by me):** all passed. They covered email normalization, duplicate checks on create and edit, keeping a candidate's own email, optional fields and sources, search and ordering, pagination keeping the search, delete confirmation and cancel, admin duplicate validation, and the dark narrow-screen layouts.
+  - **Docs:** Phase 5's acceptance criteria are ticked in the plan. CLAUDE.md is unchanged, because the phase's patterns were already covered by existing conventions.
+- **Deviations:**
+  - **Search split:** I required separate tests for first name, last name and email matching, plus a separate ordering test, so failures would be clear.
+  - **Test data:** I required each search test's text to match only the field it tests.
+  - **Ordering:** the agent recommended temporarily removing `Meta.ordering` so the ordering test could go RED first. I chose to keep the working code and record the test as a regression test instead.
+  - **Ordinary coverage:** I explicitly kept the duplicate checks on create and edit, self-email edits, the database constraint, and edit and admin normalization as ordinary tests.
+- **Sideways:**
+  - **Built ahead of TDD:** the agent added `Meta.ordering` while scaffolding for test 1, copying the Skill and JobOpening models, so the approved ordering test couldn't fail first. The agent flagged this before writing the test rather than after. It also saved a memory note to keep scaffolding free of behavior that an approved test is meant to check.
+  - **Duplicate check not run RED:** the duplicate-email check was added together with its tests, as ordinary work following the Skills pattern, so those tests weren't seen failing first.
+  - **Admin test cleanup:** the first draft of the "admin change rejects another candidate's email" test made an unneeded extra save first. The agent simplified it before running anything.
+  - **Formatter:** `ruff format` rewrapped long lines in `test_candidates.py` once, with no change to what the tests assert.
+  - **Skill lookup:** `/implement` isn't one of the session's registered skills, so the agent read `.claude/skills/implement/SKILL.md` directly.
+
 ## 2026-11-01 — Phase 4: Closing and reopening jobs
 
 ### Prompts

@@ -1,15 +1,15 @@
 from urllib.parse import urlencode
 
 from django.core.paginator import Paginator
-from django.db.models import ProtectedError
+from django.db.models import ProtectedError, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from . import services
-from .forms import JobOpeningForm, SkillForm
-from .models import JobOpening, Skill
+from .forms import CandidateForm, JobOpeningForm, SkillForm
+from .models import Candidate, JobOpening, Skill
 
 # Placeholder pages for the top navigation. Later phases replace each one.
 
@@ -26,8 +26,83 @@ def pipeline(request):
     return _placeholder(request, "Pipeline", "pipeline")
 
 
+# Candidates
+
+
 def candidate_list(request):
-    return _placeholder(request, "Candidates", "candidates")
+    q = request.GET.get("q", "").strip()
+    candidates = Candidate.objects.all()
+    if q:
+        candidates = candidates.filter(
+            Q(first_name__icontains=q)
+            | Q(last_name__icontains=q)
+            | Q(email__icontains=q)
+        )
+
+    page_obj = Paginator(candidates, 25).get_page(request.GET.get("page"))
+    # Page links carry the search so paging keeps the same view.
+    return render(
+        request,
+        "hiring/candidate_list.html",
+        {
+            "candidates": page_obj.object_list,
+            "page_obj": page_obj,
+            "page_query": urlencode({"q": q}) if q else "",
+            "q": q,
+            "active_nav": "candidates",
+        },
+    )
+
+
+def candidate_create(request):
+    form = CandidateForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        candidate = form.save()
+        return redirect("hiring:candidate_detail", pk=candidate.pk)
+    return render(
+        request,
+        "hiring/candidate_form.html",
+        {"form": form, "title": "New candidate", "active_nav": "candidates"},
+    )
+
+
+def candidate_detail(request, pk):
+    candidate = get_object_or_404(Candidate, pk=pk)
+    return render(
+        request,
+        "hiring/candidate_detail.html",
+        {"candidate": candidate, "active_nav": "candidates"},
+    )
+
+
+def candidate_edit(request, pk):
+    candidate = get_object_or_404(Candidate, pk=pk)
+    form = CandidateForm(request.POST or None, instance=candidate)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        return redirect("hiring:candidate_detail", pk=candidate.pk)
+    return render(
+        request,
+        "hiring/candidate_form.html",
+        {
+            "form": form,
+            "candidate": candidate,
+            "title": "Edit candidate",
+            "active_nav": "candidates",
+        },
+    )
+
+
+def candidate_delete(request, pk):
+    candidate = get_object_or_404(Candidate, pk=pk)
+    if request.method == "POST":
+        candidate.delete()
+        return redirect("hiring:candidate_list")
+    return render(
+        request,
+        "hiring/candidate_confirm_delete.html",
+        {"candidate": candidate, "active_nav": "candidates"},
+    )
 
 
 # Jobs

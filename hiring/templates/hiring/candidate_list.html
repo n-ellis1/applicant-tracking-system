@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Candidates{% endblock %}
+
+{% block content %}
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <h1 class="text-2xl font-semibold">Candidates</h1>
+    <a href="{% url 'hiring:candidate_create' %}" class="btn btn-primary">New candidate</a>
+  </div>
+
+  <form method="get" class="mb-4 flex flex-wrap items-end gap-2" role="search">
+    <label class="flex min-w-0 grow flex-col gap-1 sm:max-w-sm">
+      <span class="text-sm">Name or email</span>
+      <input type="search" name="q" value="{{ q }}" class="input w-full" placeholder="Search by name or email">
+    </label>
+    <button type="submit" class="btn btn-primary">Search</button>
+  </form>
+
+  <div class="card border border-base-300 bg-base-200">
+    <div class="card-body p-0">
+      {% if candidates %}
+        <div class="overflow-x-auto">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Source</th>
+                <th class="text-right">Applications</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for candidate in candidates %}
+                <tr>
+                  <td><a href="{% url 'hiring:candidate_detail' candidate.pk %}" class="link link-hover font-medium">{{ candidate.last_name }}, {{ candidate.first_name }}</a></td>
+                  <td class="break-all">{{ candidate.email }}</td>
+                  <td>{{ candidate.get_source_display }}</td>
+                  {# Applications arrive in a later phase. #}
+                  <td class="text-right">0</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="p-4 text-base-content/80">No candidates match.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if page_obj.has_other_pages %}
+    <nav class="mt-4 flex items-center justify-center gap-2" aria-label="Pagination">
+      {% if page_obj.has_previous %}
+        <a href="?{% if page_query %}{{ page_query }}&amp;{% endif %}page={{ page_obj.previous_page_number }}" rel="prev" class="btn btn-outline btn-sm">Previous</a>
+      {% endif %}
+      <span class="text-sm">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}
+        <a href="?{% if page_query %}{{ page_query }}&amp;{% endif %}page={{ page_obj.next_page_number }}" rel="next" class="btn btn-outline btn-sm">Next</a>
+      {% endif %}
+    </nav>
+  {% endif %}
+{% endblock %}

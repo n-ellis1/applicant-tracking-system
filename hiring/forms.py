@@ -1,6 +1,6 @@
 from django import forms
 
-from .models import JobOpening, Skill
+from .models import Candidate, JobOpening, Skill
 
 
 class SkillForm(forms.ModelForm):
@@ -42,3 +42,42 @@ class JobOpeningForm(forms.ModelForm):
             ),
             "skills": forms.CheckboxSelectMultiple(attrs={"class": "checkbox"}),
         }
+
+
+class CandidateForm(forms.ModelForm):
+    class Meta:
+        model = Candidate
+        fields = [
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "location",
+            "profile_url",
+            "source",
+            "source_details",
+            "notes",
+        ]
+        widgets = {
+            "first_name": forms.TextInput(attrs={"class": "input w-full"}),
+            "last_name": forms.TextInput(attrs={"class": "input w-full"}),
+            "email": forms.EmailInput(attrs={"class": "input w-full"}),
+            "phone": forms.TextInput(attrs={"class": "input w-full"}),
+            "location": forms.TextInput(attrs={"class": "input w-full"}),
+            "profile_url": forms.URLInput(
+                attrs={"class": "input w-full", "placeholder": "https://"}
+            ),
+            "source": forms.Select(attrs={"class": "select w-full"}),
+            "source_details": forms.TextInput(
+                attrs={"class": "input w-full", "placeholder": "e.g. referred by"}
+            ),
+            "notes": forms.Textarea(attrs={"class": "textarea w-full", "rows": 4}),
+        }
+
+    def clean_email(self):
+        # The form field has already trimmed surrounding spaces.
+        email = self.cleaned_data["email"].lower()
+        others = Candidate.objects.exclude(pk=self.instance.pk)
+        if others.filter(email__iexact=email).exists():
+            raise forms.ValidationError("A candidate with this email already exists.")
+        return email

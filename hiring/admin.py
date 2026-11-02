@@ -1,7 +1,7 @@
 from django.contrib import admin
 
-from .forms import JobOpeningForm, SkillForm
-from .models import JobOpening, Skill
+from .forms import CandidateForm, JobOpeningForm, SkillForm
+from .models import Candidate, JobOpening, Skill
 
 
 class SkillAdminForm(SkillForm):
@@ -43,3 +43,19 @@ class JobOpeningAdmin(admin.ModelAdmin):
     filter_horizontal = ["skills"]
     # Status and closed date change only by closing and reopening the job.
     readonly_fields = ["status", "closed_at", "created_at", "updated_at"]
+
+
+class CandidateAdminForm(CandidateForm):
+    """The app's email normalization and duplicate check, with admin's widgets."""
+
+    class Meta(CandidateForm.Meta):
+        widgets = {}
+
+
+@admin.register(Candidate)
+class CandidateAdmin(admin.ModelAdmin):
+    form = CandidateAdminForm
+    list_display = ["last_name", "first_name", "email", "source"]
+    list_filter = ["source"]
+    search_fields = ["first_name", "last_name", "email"]
+    readonly_fields = ["created_at", "updated_at"]

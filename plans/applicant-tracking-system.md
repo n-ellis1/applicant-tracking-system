@@ -252,13 +252,13 @@ The `Candidate` model and migration. Candidates list with a GET search by first 
 
 ### Acceptance criteria
 
-- [ ] First name, last name and email are required. Phone, location, profile URL, notes, source details are optional. Source uses the four fixed choices.
-- [ ] Email is stored trimmed and lowercased.
-- [ ] Creating, or editing to, an email that matches another candidate in different case or with spaces shows a form error.
-- [ ] Saving an edit with the candidate's own email (any case) succeeds.
-- [ ] The database rejects a duplicate email when the form is bypassed.
-- [ ] Search matches name or email, the list sorts by last then first name, shows 25 per page and keeps the search across pages.
-- [ ] A candidate with no applications can be deleted after confirmation.
+- [x] First name, last name and email are required. Phone, location, profile URL, notes, source details are optional. Source uses the four fixed choices.
+- [x] Email is stored trimmed and lowercased.
+- [x] Creating, or editing to, an email that matches another candidate in different case or with spaces shows a form error.
+- [x] Saving an edit with the candidate's own email (any case) succeeds.
+- [x] The database rejects a duplicate email when the form is bypassed.
+- [x] Search matches name or email, the list sorts by last then first name, shows 25 per page and keeps the search across pages.
+- [x] A candidate with no applications can be deleted after confirmation.
 
 ### Possible TDD candidates (not approved)
 

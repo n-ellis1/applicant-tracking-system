@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}{{ candidate }}{% endblock %}
+
+{% block content %}
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex min-w-0 flex-wrap items-center gap-3">
+      <h1 class="break-words text-2xl font-semibold">{{ candidate }}</h1>
+      <span class="badge badge-outline">{{ candidate.get_source_display }}</span>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'hiring:candidate_edit' candidate.pk %}" class="btn btn-outline">Edit</a>
+      <a href="{% url 'hiring:candidate_delete' candidate.pk %}" class="btn btn-outline btn-error">Delete</a>
+    </div>
+  </div>
+
+  <div class="card border border-base-300 bg-base-200">
+    <div class="card-body gap-6">
+      <dl class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <dt class="text-sm text-base-content/70">Email</dt>
+          <dd class="break-all">{{ candidate.email }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm text-base-content/70">Phone</dt>
+          <dd class="break-words">{{ candidate.phone|default:"—" }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm text-base-content/70">Location</dt>
+          <dd class="break-words">{{ candidate.location|default:"—" }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm text-base-content/70">Profile URL</dt>
+          <dd class="break-all">
+            {% if candidate.profile_url %}
+              <a href="{{ candidate.profile_url }}" class="link" rel="noopener noreferrer" target="_blank">{{ candidate.profile_url }}</a>
+            {% else %}
+              —
+            {% endif %}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-sm text-base-content/70">Source</dt>
+          <dd class="break-words">{{ candidate.get_source_display }}{% if candidate.source_details %}: {{ candidate.source_details }}{% endif %}</dd>
+        </div>
+      </dl>
+
+      <section>
+        <h2 class="mb-2 font-semibold">Notes</h2>
+        {% if candidate.notes %}
+          <div class="break-words">{{ candidate.notes|linebreaks }}</div>
+        {% else %}
+          <p class="text-base-content/80">No notes.</p>
+        {% endif %}
+      </section>
+
+      <section>
+        <h2 class="mb-2 font-semibold">Applications</h2>
+        {# Recording applications arrives in a later phase. #}
+        <p class="text-base-content/80">No applications yet.</p>
+      </section>
+
+      <dl class="grid gap-4 text-sm sm:grid-cols-2">
+        <div>
+          <dt class="text-base-content/70">Created</dt>
+          <dd>{{ candidate.created_at|date:"M j, Y, g:i A T" }}</dd>
+        </div>
+        <div>
+          <dt class="text-base-content/70">Last updated</dt>
+          <dd>{{ candidate.updated_at|date:"M j, Y, g:i A T" }}</dd>
+        </div>
+      </dl>
+    </div>
+  </div>
+{% endblock %}
